@@ -1,0 +1,22 @@
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime state: SQLite DB (rebuilt by scripts.load_data) and the TTS segment cache
+var/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Synthesized eval audio and STT transcript cache (regenerated; costs credits to rebuild)
+eval/audio/
+
+# Raw third-party downloads (e.g. the Kaggle A-Z CSV): keep out of the repo
+data/raw/*
+!data/raw/.gitkeep

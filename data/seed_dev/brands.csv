@@ -1,0 +1,40 @@
+name,composition,form,release,pack_qty,pack_unit,mrp,manufacturer,scheduled
+Augmentin 625 Duo Tablet,Amoxycillin 500mg + Clavulanic Acid 125mg,tablet,IR,10,tablets,223.40,GlaxoSmithKline,1
+Augmentin 375 Tablet,Amoxycillin 250mg + Clavulanic Acid 125mg,tablet,IR,6,tablets,120.00,GlaxoSmithKline,1
+Augmentin Duo Oral Suspension,Amoxycillin 400mg/5ml + Clavulanic Acid 57mg/5ml,suspension,IR,30,ml,170.00,GlaxoSmithKline,1
+Moxikind-CV 625 Tablet,Amoxycillin 500mg + Clavulanic Acid 125mg,tablet,IR,6,tablets,168.00,Mankind,1
+Clavam 625 Tablet,Amoxycillin 500mg + Clavulanic Acid 125mg,tablet,IR,6,tablets,201.00,Alkem,1
+Mox 500 Capsule,Amoxycillin 500mg,capsule,IR,10,capsules,95.00,Sun Pharma,1
+Novamox 500 Capsule,Amoxycillin 500mg,capsule,IR,10,capsules,78.00,Cipla,1
+Dolo 650 Tablet,Paracetamol 650mg,tablet,IR,15,tablets,33.60,Micro Labs,1
+Calpol 650 Tablet,Paracetamol 650mg,tablet,IR,15,tablets,30.70,GlaxoSmithKline,1
+Crocin Advance Tablet,Paracetamol 500mg,tablet,IR,20,tablets,22.00,GlaxoSmithKline,1
+Calpol 500 Tablet,Paracetamol 500mg,tablet,IR,15,tablets,17.00,GlaxoSmithKline,1
+Calpol 250 Suspension,Paracetamol 250mg/5ml,suspension,IR,60,ml,52.00,GlaxoSmithKline,1
+Paracetamol Paediatric Suspension 120,Paracetamol 120mg/5ml,suspension,IR,60,ml,30.00,Demo Pharma (fixture),1
+Crocin Drops,Paracetamol 100mg/ml,drops,IR,15,ml,44.00,GlaxoSmithKline,1
+Pan 40 Tablet,Pantoprazole 40mg,tablet,DR,15,tablets,155.00,Alkem,1
+Pantocid 40 Tablet,Pantoprazole 40mg,tablet,DR,15,tablets,162.00,Sun Pharma,1
+Glycomet 500 Tablet,Metformin 500mg,tablet,IR,20,tablets,25.00,USV,1
+Glycomet SR 500 Tablet,Metformin 500mg,tablet,SR,20,tablets,40.00,USV,1
+Glycomet GP 1 Tablet,Glimepiride 1mg + Metformin 500mg,tablet,SR,15,tablets,92.00,USV,1
+Amlong 5 Tablet,Amlodipine 5mg,tablet,IR,15,tablets,52.00,Micro Labs,1
+Amlokind 5 Tablet,Amlodipine 5mg,tablet,IR,15,tablets,26.00,Mankind,1
+Telma 40 Tablet,Telmisartan 40mg,tablet,IR,30,tablets,232.00,Glenmark,1
+Atorva 10 Tablet,Atorvastatin 10mg,tablet,IR,15,tablets,104.00,Zydus,1
+Cetzine 10 Tablet,Cetirizine 10mg,tablet,IR,10,tablets,21.00,Alkem,1
+Okacet 10 Tablet,Cetirizine 10mg,tablet,IR,10,tablets,18.50,Cipla,1
+Allegra 120 Tablet,Fexofenadine 120mg,tablet,IR,10,tablets,224.00,Sanofi,1
+Azithral 500 Tablet,Azithromycin 500mg,tablet,IR,5,tablets,119.50,Alembic,1
+Azee 500 Tablet,Azithromycin 500mg,tablet,IR,5,tablets,112.00,Cipla,1
+Taxim-O 200 Tablet,Cefixime 200mg,tablet,IR,10,tablets,109.00,Alkem,1
+Zifi 200 Tablet,Cefixime 200mg,tablet,IR,10,tablets,104.00,FDC,1
+Thyronorm 50 mcg Tablet,Levothyroxine 50mcg,tablet,IR,120,tablets,183.00,Abbott,1
+Montair LC Tablet,Montelukast 10mg + Levocetirizine 5mg,tablet,IR,15,tablets,262.00,Cipla,1
+Combiflam Tablet,Ibuprofen 400mg + Paracetamol 325mg,tablet,IR,20,tablets,45.00,Sanofi,1
+Zerodol-P Tablet,Aceclofenac 100mg + Paracetamol 325mg,tablet,IR,10,tablets,72.00,Ipca,1
+Trajenta 5 Tablet,Linagliptin 5mg,tablet,IR,30,tablets,950.00,Boehringer Ingelheim,1
+Linospan 600 Tablet,Linezolid 600mg,tablet,IR,10,tablets,640.00,Cipla,1
+Ecosprin 75 Tablet,Aspirin 75mg,tablet,DR,14,tablets,5.10,USV,1
+Shelcal 500 Tablet,Calcium Carbonate 1250mg + Cholecalciferol 250IU,tablet,IR,15,tablets,120.00,Torrent,0
+Saathi-Demo FDC Tablet,Aceclofenac 100mg + Paracetamol 325mg + Rabeprazole 20mg,tablet,IR,10,tablets,95.00,Demo Pharma (fixture),1

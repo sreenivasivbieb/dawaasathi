@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>दवा साथी · Dawaa Saathi</title>
+  <meta name="description" content="बोलकर दवा जाँचें — Voice-first prescription companion">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f5c4d" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#result" data-i18n="reply">जवाब</a>
+
+  <header class="top">
+    <div class="top__bar">
+      <div class="brand">
+        <img src="/icons/icon.svg" alt="" width="40" height="40">
+        <div>
+          <h1 class="brand__name" data-i18n="app_name">दवा साथी</h1>
+          <p class="brand__tag"><span data-i18n="tagline">बोलकर दवा जाँचें</span></p>
+        </div>
+      </div>
+      <div class="top__actions">
+        <button id="btn-pouch" class="iconbtn" type="button" aria-haspopup="dialog" aria-controls="pouch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.5h14v9.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM8.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5M12 12.5v5M9.5 15h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="iconbtn__lbl"><span data-i18n="pouch_open">घर की दवाएँ</span><span class="en" data-i18n-sub="pouch_open">Home pouch</span></span>
+          <span id="pouch-count" class="count" hidden>0</span>
+        </button>
+        <button id="btn-new" class="iconbtn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="iconbtn__lbl"><span data-i18n="new_chat">नई बातचीत</span><span class="en" data-i18n-sub="new_chat">New</span></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="top__row">
+      <fieldset class="langs">
+        <legend class="vh">भाषा / Language</legend>
+        <label><input type="radio" name="lang" value="hi" checked><span lang="hi">हिंदी</span></label>
+        <label><input type="radio" name="lang" value="en"><span lang="en">English</span></label>
+        <label><input type="radio" name="lang" value="mr"><span lang="mr">मराठी</span></label>
+      </fieldset>
+      <div class="toggles">
+        <label class="switch"><input type="checkbox" id="tg-phone" role="switch"><span class="switch__track" aria-hidden="true"></span>
+          <span class="switch__lbl"><span data-i18n="phone_mode">फ़ोन कॉल मोड</span><span class="en" data-i18n-sub="phone_mode">Phone mode</span></span></label>
+        <label class="switch"><input type="checkbox" id="tg-live" role="switch"><span class="switch__track" aria-hidden="true"></span>
+          <span class="switch__lbl"><span data-i18n="live_mode">लाइव (बीटा)</span><span class="en" data-i18n-sub="live_mode">Live (beta)</span></span></label>
+      </div>
+    </div>
+    <div id="modes" class="modes" aria-label="STT / TTS / OCR"></div>
+  </header>
+
+  <main id="main">
+    <section class="talk" aria-labelledby="mic-status">
+      <button id="mic" class="mic" type="button" data-state="idle" aria-label="बोलना शुरू करें">
+        <span class="mic__level" aria-hidden="true"></span>
+        <svg class="mic__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="2.5" width="7" height="12" rx="3.5" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg class="mic__stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>
+        <span class="mic__spin" aria-hidden="true"></span>
+      </button>
+      <p id="mic-status" class="mic-status" aria-live="polite"><span class="lbl">दबाकर बोलिए</span><span class="en">Tap to speak</span></p>
+      <p id="live-line" class="live-line" aria-live="polite" hidden></p>
+      <p class="hint" data-i18n="mic_hint">दवा का नाम बोलिए, जैसे “डोलो 650 कितने का है?”</p>
+    </section>
+
+    <form id="ask" class="ask" autocomplete="off">
+      <label for="q" class="vh" data-i18n="type_label">लिखकर पूछें</label>
+      <input id="q" name="q" type="text" maxlength="500" enterkeyhint="send" data-i18n-ph="type_placeholder" placeholder="जैसे: डोलो 650 कितने का है">
+      <button type="submit" class="btn btn--primary btn--send"><span data-i18n="send">भेजें</span><span class="en" data-i18n-sub="send">Send</span></button>
+    </form>
+
+    <section class="photos" aria-label="Photos">
+      <div class="photo-btns">
+        <label class="photo-btn" id="lbl-strip">
+          <input class="vh" type="file" id="in-strip" accept="image/*" capture="environment">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.6-2.4h6.8L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span><span data-i18n="strip_photo">पत्ती की फोटो</span><span class="en" data-i18n-sub="strip_photo">Strip photo</span></span>
+        </label>
+        <label class="photo-btn" id="lbl-rx">
+          <input class="vh" type="file" id="in-rx" accept="image/*" capture="environment">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14.5 3v4.5H19M9 12h7M9 15.5h7M9 8.5h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          <span><span data-i18n="rx_photo">पर्चे की फोटो</span><span class="en" data-i18n-sub="rx_photo">Prescription photo</span></span>
+        </label>
+      </div>
+      <p id="photo-hint" class="photo-hint" role="note" hidden></p>
+      <div id="thumbs" class="thumbs"></div>
+      <button id="btn-check-photo" class="btn btn--wide" type="button" hidden><span data-i18n="check_photo">सिर्फ फोटो जाँचें</span><span class="en" data-i18n-sub="check_photo">Check photo</span></button>
+    </section>
+
+    <section id="result" class="result" aria-live="polite" aria-atomic="false" tabindex="-1"></section>
+  </main>
+
+  <footer class="foot">
+    <details id="data">
+      <summary><span data-i18n="data">आँकड़े</span> <span class="en" data-i18n-sub="data">Data</span></summary>
+      <div id="data-body"><p class="small muted">…</p></div>
+    </details>
+    <details id="debug">
+      <summary><span data-i18n="debug">तकनीकी जानकारी</span> <span class="en" data-i18n-sub="debug">Debug</span></summary>
+      <div id="debug-body"><p class="small muted">—</p></div>
+    </details>
+    <p class="foot__note"><span data-i18n="doctor_footer">डॉक्टर या फार्मासिस्ट से पुष्टि करें</span> · <span class="en" data-i18n-sub="doctor_footer">Confirm with your doctor or pharmacist</span></p>
+  </footer>
+
+  <dialog id="consent" class="modal" aria-labelledby="consent-title">
+    <form method="dialog" class="modal__body">
+      <img src="/icons/icon.svg" alt="" width="56" height="56">
+      <h2 id="consent-title"><span data-i18n="consent_title">शुरू करने से पहले</span><span class="en" data-i18n-sub="consent_title">Before you start</span></h2>
+      <ul class="consent-list">
+        <li><span data-i18n="consent_1"></span><span class="en" data-i18n-sub="consent_1"></span></li>
+        <li><span data-i18n="consent_2"></span><span class="en" data-i18n-sub="consent_2"></span></li>
+        <li><span data-i18n="consent_3"></span><span class="en" data-i18n-sub="consent_3"></span></li>
+        <li><span data-i18n="consent_4"></span><span class="en" data-i18n-sub="consent_4"></span></li>
+      </ul>
+      <fieldset class="langs langs--modal">
+        <legend class="vh">भाषा / Language</legend>
+        <label><input type="radio" name="lang2" value="hi" checked><span lang="hi">हिंदी</span></label>
+        <label><input type="radio" name="lang2" value="en"><span lang="en">English</span></label>
+        <label><input type="radio" name="lang2" value="mr"><span lang="mr">मराठी</span></label>
+      </fieldset>
+      <button id="consent-ok" class="btn btn--primary btn--wide" value="ok"><span data-i18n="consent_accept">समझ गया, शुरू करें</span><span class="en" data-i18n-sub="consent_accept">I understand, start</span></button>
+    </form>
+  </dialog>
+
+  <dialog id="pouch" class="modal sheet" aria-labelledby="pouch-title">
+    <div class="modal__body">
+      <div class="sheet__head">
+        <h2 id="pouch-title"><span data-i18n="pouch_title">घर की दवाएँ</span><span class="en" data-i18n-sub="pouch_title">Home pouch</span></h2>
+        <button id="pouch-close" class="iconbtn" type="button" data-i18n-aria="close" aria-label="बंद करें">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <p class="privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7.5a5 5 0 0 1 10 0V10M5.5 10h13v10h-13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span><span data-i18n="pouch_note"></span><span class="en" data-i18n-sub="pouch_note"></span></span></p>
+      <ul id="pouch-list" class="pouch-list"></ul>
+      <form id="pouch-form" class="ask" autocomplete="off">
+        <label for="pouch-in" class="vh" data-i18n="pouch_placeholder">साल्ट का नाम</label>
+        <input id="pouch-in" type="text" maxlength="80" data-i18n-ph="pouch_placeholder" placeholder="साल्ट का नाम, जैसे paracetamol">
+        <button class="btn btn--primary" type="submit"><span data-i18n="add">जोड़ें</span></button>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

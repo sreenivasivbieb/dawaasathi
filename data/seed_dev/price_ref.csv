@@ -1,0 +1,16 @@
+composition,form,release,pmbj_name,pmbj_price,pmbj_pack_qty,pmbj_as_of,pmbj_source,nppa_ceiling_unit,nppa_as_of,nppa_source
+Amoxycillin 500mg + Clavulanic Acid 125mg,tablet,IR,Jan Aushadhi Amoxycillin + Clavulanic Acid 625,62.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),15.97,2026-04-01,NPPA ceiling list (DEV FIXTURE)
+Amoxycillin 500mg,capsule,IR,Jan Aushadhi Amoxycillin 500,24.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Paracetamol 650mg,tablet,IR,Jan Aushadhi Paracetamol 650,12.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),2.04,2026-04-01,NPPA ceiling list (DEV FIXTURE)
+Paracetamol 500mg,tablet,IR,Jan Aushadhi Paracetamol 500,8.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Paracetamol 250mg/5ml,suspension,IR,Jan Aushadhi Paracetamol Suspension 250,16.00,60,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Pantoprazole 40mg,tablet,DR,Jan Aushadhi Pantoprazole 40,14.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Metformin 500mg,tablet,IR,Jan Aushadhi Metformin 500,6.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Metformin 500mg,tablet,SR,Jan Aushadhi Metformin SR 500,9.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Amlodipine 5mg,tablet,IR,Jan Aushadhi Amlodipine 5,4.50,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Telmisartan 40mg,tablet,IR,Jan Aushadhi Telmisartan 40,12.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Atorvastatin 10mg,tablet,IR,Jan Aushadhi Atorvastatin 10,8.50,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Cetirizine 10mg,tablet,IR,Jan Aushadhi Cetirizine 10,3.50,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Azithromycin 500mg,tablet,IR,Jan Aushadhi Azithromycin 500,27.00,3,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Cefixime 200mg,tablet,IR,Jan Aushadhi Cefixime 200,31.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,
+Montelukast 10mg + Levocetirizine 5mg,tablet,IR,Jan Aushadhi Montelukast + Levocetirizine,26.00,10,2026-10-01,PMBJP product list (DEV FIXTURE),,,

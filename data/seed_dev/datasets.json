@@ -1,0 +1,6 @@
+{
+  "brands": {"as_of": "2026-11-12", "source": "DEV FIXTURE: approximate MRPs, not verified - replace with your brand DB"},
+  "price_ref": {"as_of": "2026-10-01", "source": "DEV FIXTURE: PMBJP / NPPA values are placeholders"},
+  "banned_fdc": {"as_of": "2026-11-12", "source": "DEV FIXTURE: one synthetic entry - load the official notifications"},
+  "nsq_alerts": {"as_of": "2026-11-12", "source": "DEV FIXTURE: one synthetic batch"}
+}
