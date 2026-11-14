@@ -41,7 +41,7 @@
     "UNVERIFIED": "पूरी जानकारी नहीं मिली, इसलिए हम पक्का नहीं कह सकते।"
   },
   "clauses": {
-    "alt_cheapest": "सबसे सस्ता विकल्प {alt_name} है: {alt_qty} {alt_unit} {alt_price} रुपये में, लगभग {saves_pct} प्रतिशत बचत।",
+    "alt_cheapest": "सस्ता विकल्प {alt_name} है: {alt_qty} {alt_unit} {alt_price} रुपये में, लगभग {saves_pct} प्रतिशत बचत।",
     "alt_cheapest_noprice": "सस्ता विकल्प {alt_name} है: {alt_qty} {alt_unit} {alt_price} रुपये में।",
     "no_alt": "इसी साल्ट, ताकत और रूप में इससे सस्ता विकल्प हमारी सूची में नहीं मिला।",
     "price_gap": "इसका दाम {qty} {unit} के {mrp} रुपये है, और जन औषधि में {ref_qty} {unit} के {ref_price} रुपये।",
@@ -52,7 +52,7 @@
     "dosage_rx": "पर्चे में लिखा है: {directions}।",
     "dosage_none": "खुराक के बारे में डॉक्टर या फार्मासिस्ट से ही पूछें।",
     "flag_DUPLICATE_SALT": "ध्यान दें: {dup_salts} आपकी घर की दवाओं में पहले से है।",
-    "flag_SYMPTOM_MISMATCH": "यह दवा आमतौर पर {usual_use} के लिए होती है, {symptom} के लिए नहीं।",
+    "flag_SYMPTOM_MISMATCH": "यह दवा आमतौर पर {usual_use} के लिए होती है; {symptom} इसका आम उपयोग नहीं है।",
     "flag_LOOK_ALIKE": "इसका नाम {similar_to} से मिलता-जुलता है, नाम ध्यान से मिलाएँ।",
     "flag_NSQ_BATCH": "इस बैच {batch} पर सरकारी गुणवत्ता चेतावनी है।",
     "flag_POSSIBLE_BANNED": "यह मिश्रण प्रतिबंधित सूची की एक प्रविष्टि से मिलता है, पक्की जाँच नहीं हो पाई।",
@@ -64,7 +64,16 @@
     "data_stale": "दाम की जानकारी पुरानी हो सकती है।",
     "flag_SYMPTOM_OK": "यह दवा आमतौर पर {usual_use} के लिए ही होती है।",
     "price_gap_noqty": "इसका दाम {mrp} रुपये है, और जन औषधि में यही दवा {ref_price} रुपये की है।",
-    "price_mrp_only_noqty": "इसका दाम {mrp} रुपये है।"
+    "price_mrp_only_noqty": "इसका दाम {mrp} रुपये है।",
+    "price_ref_only": "जन औषधि में {ref_qty} {unit} {ref_price} रुपये में मिलती है।",
+    "within_ceiling": "यह दाम सरकारी अधिकतम कीमत, यानी NPPA सीमा के अंदर है।",
+    "ceiling_info": "सरकारी अधिकतम कीमत {ceiling} रुपये प्रति {unit_one} है, GST अलग।",
+    "flag_SYMPTOM_UNKNOWN": "{symptom} के लिए यह दवा सही है या नहीं, यह जानकारी हमारे डेटा में नहीं है।",
+    "flag_SYMPTOM_OK_WEB": "इंटरनेट स्रोत {source} के अनुसार यह दवा आमतौर पर {usual_use} के लिए होती है।",
+    "flag_SYMPTOM_MISMATCH_WEB": "इंटरनेट स्रोत {source} के अनुसार यह दवा आमतौर पर {usual_use} के लिए होती है; {symptom} इसका आम उपयोग नहीं है।",
+    "flag_USE_INFO": "यह दवा आमतौर पर {usual_use} के लिए होती है।",
+    "flag_USE_INFO_WEB": "इंटरनेट स्रोत {source} के अनुसार यह दवा आमतौर पर {usual_use} के लिए होती है।",
+    "flag_USE_UNKNOWN": "यह दवा किस काम आती है, यह भरोसेमंद जानकारी अभी नहीं मिल पाई।"
   },
   "chemist": {
     "BANNED_COMBINATION": "भैया, {salt_names} का यह मिश्रण सरकार की प्रतिबंधित सूची ({list_ref}, {list_date}) में दिखता है। क्या डॉक्टर से बात करके दूसरा विकल्प मिल सकता है?",
@@ -105,7 +114,11 @@
       "अक्टूबर",
       "नवंबर",
       "दिसंबर"
-    ]
+    ],
+    "one_tablet": "गोली",
+    "one_capsule": "कैप्सूल",
+    "one_ml": "ml",
+    "one_other": "यूनिट"
   },
   "uses": {
     "fever": "बुखार",

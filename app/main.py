@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.adapters.gnani_stt import MockSTT, PrismaSTT
 from app.adapters.gnani_tts import MockTTS, TimbreTTS
+from app.adapters.llm import GroqLLM
 from app.adapters.ocr import OCRReader
 from app.api import routes, stream, whatsapp
 from app.api.routes import APIError, error_response
@@ -21,13 +22,15 @@ from app.api.sessions import SessionStore
 from app.config import ROOT, Settings, get_settings
 from app.db import Store, connect
 from app.match.index import MatchIndex
+from app.adapters.tavily import Tavily
+from app.engine.web_uses import WebUseLookup
 from app.pipeline import Pipeline
 from app.tts.cache import AudioService, SegmentCache
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
-def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None) -> None:
+def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, llm=None) -> None:
     conn = connect(settings.db_path)
     store = Store.load(conn)
     conn.close()
@@ -49,7 +52,15 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None) 
     app.state.ocr = ocr
     app.state.audio = audio
     app.state.sessions = sessions
-    app.state.pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions)
+    if llm is None and (settings.llm_nlu or settings.llm_reply):
+        llm = GroqLLM(settings, http)
+    app.state.llm = llm
+    web_uses = None
+    if settings.web_lookup:
+        web_llm = llm if llm is not None else GroqLLM(settings, http)
+        web_uses = WebUseLookup(Tavily(settings.tavily_api_key, http), web_llm,
+                                settings.cache_dir.parent / "web_uses.json")
+    app.state.pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses)
 
 
 def create_app(settings: Settings | None = None, **overrides) -> FastAPI:

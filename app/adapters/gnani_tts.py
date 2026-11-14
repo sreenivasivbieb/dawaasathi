@@ -126,12 +126,19 @@ class TimbreTTS:
                     return
 
     async def synthesize(self, text: str, lang: str, sample_rate: int | None = None) -> bytes:
-        async with _LOCK:
-            resp = await self.client.post(
-                f"{self.s.gnani_base_url}/api/v1/tts/inference",
-                headers={"X-API-Key-ID": self.s.gnani_api_key or "", "Content-Type": "application/json"},
-                json=self._body(text, lang, sample_rate), timeout=httpx.Timeout(30.0, connect=5.0),
-            )
+        for attempt in range(2):  # retry once on a connect / network error
+            try:
+                async with _LOCK:
+                    resp = await self.client.post(
+                        f"{self.s.gnani_base_url}/api/v1/tts/inference",
+                        headers={"X-API-Key-ID": self.s.gnani_api_key or "", "Content-Type": "application/json"},
+                        json=self._body(text, lang, sample_rate), timeout=httpx.Timeout(30.0, connect=8.0),
+                    )
+                break
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if attempt == 1:
+                    raise TTSError("NETWORK", str(exc) or type(exc).__name__, True) from exc
+                await asyncio.sleep(0.5)
         if resp.status_code != 200:
             raise TTSError(f"HTTP_{resp.status_code}", resp.text[:300], resp.status_code >= 500)
         return strip_wav_header(resp.content)

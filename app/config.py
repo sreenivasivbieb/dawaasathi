@@ -52,6 +52,8 @@ class Settings:
     gnani_base_url: str
     gnani_ws_url: str
     stt_model: str
+    stt_model_2: str  # second Prisma model for PRISMA_DUAL
+    stt_dual: bool
     stt_format: str
     stt_codemix_with_english: bool
     stt_keyterms_n: int
@@ -62,6 +64,11 @@ class Settings:
     ocr_providers: tuple[str, ...]
     groq_api_keys: tuple[str, ...]
     groq_vision_model: str
+    groq_llm_model: str
+    llm_mode: str  # off | nlu | reply | both  (active only when a Groq key is set)
+    llm_timeout_s: float
+    tavily_api_key: str | None
+    web_lookup_on: bool  # WEB_LOOKUP=1: usual use from trusted sites when our data has none
     anthropic_model: str
     db_path: Path
     cache_dir: Path
@@ -84,6 +91,18 @@ class Settings:
         return bool(self.gnani_api_key)
 
     @property
+    def llm_nlu(self) -> bool:
+        return bool(self.groq_api_keys) and self.llm_mode in ("nlu", "both")
+
+    @property
+    def llm_reply(self) -> bool:
+        return bool(self.groq_api_keys) and self.llm_mode in ("reply", "both")
+
+    @property
+    def web_lookup(self) -> bool:
+        return self.web_lookup_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
+
+    @property
     def tts_live(self) -> bool:
         return bool(self.gnani_api_key)
 
@@ -95,7 +114,9 @@ def get_settings() -> Settings:
         gnani_api_key=_get("GNANI_API_KEY"),
         gnani_base_url=_get("GNANI_BASE_URL", "https://api.vachana.ai"),
         gnani_ws_url=_get("GNANI_WS_URL", "wss://api.vachana.ai"),
-        stt_model=_get("PRISMA_MODEL", "prisma-v3.0"),
+        stt_model=_get("PRISMA_MODEL", "prisma-v2.5"),
+        stt_model_2=_get("PRISMA_MODEL_2", "prisma-v3.0"),
+        stt_dual=_get("PRISMA_DUAL", "0") == "1",
         stt_format=_get("PRISMA_FORMAT", "codemix"),
         stt_codemix_with_english=_get("PRISMA_ADD_ENGLISH", "1") == "1",
         stt_keyterms_n=_int("PRISMA_KEYTERMS", 150),
@@ -109,6 +130,11 @@ def get_settings() -> Settings:
             k.strip() for k in ((_get("GROQ_API_KEYS") or "") + "," + (_get("GROQ_API_KEY") or "")).split(",")
             if k.strip())),
         groq_vision_model=_get("GROQ_VISION_MODEL", "qwen/qwen3.8-27b"),
+        groq_llm_model=_get("GROQ_LLM_MODEL", "openai/gpt-oss-120b"),
+        llm_mode=(_get("LLM_MODE", "both") or "both").lower(),
+        llm_timeout_s=_float("LLM_TIMEOUT_S", 6.0),
+        tavily_api_key=_get("TAVILY_API_KEY"),
+        web_lookup_on=(_get("WEB_LOOKUP", "1") or "1") == "1",
         anthropic_model=_get("ANTHROPIC_OCR_MODEL", "claude-opus-5-5"),
         db_path=Path(_get("DAWA_DB_PATH", str(ROOT / "var" / "dawasaathi.db"))),
         cache_dir=Path(_get("DAWA_CACHE_DIR", str(ROOT / "var" / "tts_cache"))),

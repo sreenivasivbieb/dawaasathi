@@ -8,7 +8,7 @@ GST, so the comparison uses ceiling * (1 + GST)); otherwise it is only a "price 
 from __future__ import annotations
 
 from app.db import PriceRef, Store
-from app.engine.salts import salt_key, strength_key
+from app.engine.salts import release_class, salt_key, strength_key
 from app.models import DrugItem, PriceInfo
 
 
@@ -19,13 +19,17 @@ def find_ref(store: Store, item: DrugItem) -> PriceRef | None:
     stk = strength_key(item.salts, item.form)
     if stk is None:
         return None
-    release = item.release or "IR"
-    for ref in store.price_refs:
-        if ref.salt_key == sk and ref.strength_key == stk and ref.form == item.form and (
-            (ref.release or "IR") == release
-        ):
-            return ref
-    return None
+    rc = release_class(item.release, sk)
+    hits = [ref for ref in store.price_refs
+            if ref.salt_key == sk and ref.strength_key == stk and ref.form == item.form
+            and release_class(ref.release, sk) == rc]
+    if not hits:
+        return None
+    # Same class can have two rows (e.g. a PMBJP "SR" row and an NPPA "modified release" row):
+    # prefer the exact release label, then a row that has a Jan Aushadhi price.
+    exact = (item.release or "IR").upper()
+    hits.sort(key=lambda r: ((r.release or "IR").upper() != exact, r.pmbj_price is None))
+    return hits[0]
 
 
 def price_gap(store: Store, item: DrugItem, gst_pct: float, stale_days: int) -> PriceInfo:

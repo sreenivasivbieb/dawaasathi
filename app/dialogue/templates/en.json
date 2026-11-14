@@ -41,7 +41,7 @@
     "UNVERIFIED": "Some details are missing, so this cannot be confirmed."
   },
   "clauses": {
-    "alt_cheapest": "The cheapest option is {alt_name}: {alt_qty} {alt_unit} for {alt_price} rupees, about {saves_pct} percent less.",
+    "alt_cheapest": "A cheaper option is {alt_name}: {alt_qty} {alt_unit} for {alt_price} rupees, about {saves_pct} percent less.",
     "alt_cheapest_noprice": "A cheaper option is {alt_name}: {alt_qty} {alt_unit} for {alt_price} rupees.",
     "no_alt": "We did not find a cheaper option with the same salt, strength and form.",
     "price_gap": "This costs {mrp} rupees for {qty} {unit}; at Jan Aushadhi, {ref_qty} {unit} cost {ref_price} rupees.",
@@ -52,7 +52,7 @@
     "dosage_rx": "The prescription says: {directions}.",
     "dosage_none": "Please ask your doctor or pharmacist about the dose.",
     "flag_DUPLICATE_SALT": "Please note: {dup_salts} is already in your home medicines.",
-    "flag_SYMPTOM_MISMATCH": "This medicine is usually for {usual_use}, not {symptom}.",
+    "flag_SYMPTOM_MISMATCH": "This medicine is usually for {usual_use}; {symptom} is not its usual use.",
     "flag_LOOK_ALIKE": "Its name looks like {similar_to}; please check the name carefully.",
     "flag_NSQ_BATCH": "Batch {batch} has a government quality alert.",
     "flag_POSSIBLE_BANNED": "This combination resembles a banned-list entry; it could not be confirmed.",
@@ -64,7 +64,16 @@
     "data_stale": "Price data may be out of date.",
     "flag_SYMPTOM_OK": "This medicine is usually used for {usual_use}.",
     "price_gap_noqty": "This costs {mrp} rupees; the same medicine at Jan Aushadhi costs {ref_price} rupees.",
-    "price_mrp_only_noqty": "This costs {mrp} rupees."
+    "price_mrp_only_noqty": "This costs {mrp} rupees.",
+    "price_ref_only": "At Jan Aushadhi, {ref_qty} {unit} cost {ref_price} rupees.",
+    "within_ceiling": "This price is within the government NPPA ceiling.",
+    "ceiling_info": "The government ceiling price is {ceiling} rupees per {unit_one}, plus GST.",
+    "flag_SYMPTOM_UNKNOWN": "Whether this medicine is meant for {symptom} is not in our data.",
+    "flag_SYMPTOM_OK_WEB": "According to {source}, this medicine is usually used for {usual_use}.",
+    "flag_SYMPTOM_MISMATCH_WEB": "According to {source}, this medicine is usually used for {usual_use}; {symptom} is not its usual use.",
+    "flag_USE_INFO": "This medicine is usually used for {usual_use}.",
+    "flag_USE_INFO_WEB": "According to {source}, this medicine is usually used for {usual_use}.",
+    "flag_USE_UNKNOWN": "We could not find reliable information on what this medicine is used for."
   },
   "chemist": {
     "BANNED_COMBINATION": "This combination of {salt_names} appears on the government's banned list ({list_ref}, {list_date}). Could you check with the doctor for another option?",
@@ -105,7 +114,11 @@
       "October",
       "November",
       "December"
-    ]
+    ],
+    "one_tablet": "tablet",
+    "one_capsule": "capsule",
+    "one_ml": "ml",
+    "one_other": "unit"
   },
   "uses": {
     "fever": "fever",

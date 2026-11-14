@@ -37,7 +37,12 @@ FILLERS = _set(
     "ka ki ke ko hai hain tha yeh ye woh vo kya kaun koi sa si se me mein par hi bhi aur ya to ki "
     "please plz pls tell me my the a an of for is it this that what which give want need about "
     "medicine medicines tablet tablets tab strip dawa dawai doctor prescription chemist shop "
-    "wala wali wale lena lo khana kar karo"
+    "wala wali wale lena lo khana kar karo "
+    # Verb / question words: with the full brand list, "आती" otherwise matches the brand "Athi".
+    "आती आता आते आई आए आएगी आएगा आयेगी आयेगा पड़ेगी पड़ेगा पड़ती पड़ता लगती लगता लगेगी लगेगा मिलेगी "
+    "मिलेगा कैसे कहां कहाँ कहा जाता जाती जाते सकता सकती सकते हूं हूँ कहो बताएगी बताएगा "
+    "aati aata aate aayegi milegi milega kaise kahan kaha jata jati sakta sakti hu hoon "
+    "किस किसलिए काम उपयोग इस्तेमाल कशासाठी कशाला kis kaam use uses used upyog istemal"
 )
 
 INTENT_WORDS = {
@@ -59,6 +64,10 @@ INTENT_WORDS = {
         "chek sahi wahi asli चेक जांच जाँच तपासा बरोबर"
     ),
 }
+# "ये गोली किस लिए है?" / "kis kaam aati hai" / "what is it used for"
+_USE_PHRASES = [r"किस\s*(?:लिए|लिये|काम)", r"किसलिए", r"काम\s+(?:में\s+)?(?:आती|आता|आते)", r"उपयोग", r"इस्तेमाल",
+                r"कशासाठी", r"कशाला", r"\bkis\s*(?:liye|liy|kaam)", r"\bkaam\s+(?:aati|aata)", r"\bused?\s+for\b",
+                r"\bwhat\s+is\s+.+\s+for\b", r"\buses?\s+of\b"]
 _DOSAGE_PHRASES = [r"कितनी\s+बार", r"कब\s+(?:लेनी|खानी|लें|खाएं)", r"how\s+many\s+times", r"when\s+to\s+take",
                    r"दिन\s+में", r"खाने\s+(?:से\s+)?(?:पहले|बाद)"]
 
@@ -158,7 +167,12 @@ def _lookup(tok: str, table: dict) -> str | None:
     return None
 
 
+# Spelled-out letters as Prisma writes them in Devanagari: "एस आर" -> "एसआर" (SR), "ई आर", "डी आर", "एक्स आर".
+_SPACED_RELEASE = re.compile(r"(एस|ई|डी|एक्स|सी)\s+(आर|एल)(?=\s|$|[।,.?])")
+
+
 def extract(text: str) -> Entities:
+    text = _SPACED_RELEASE.sub(r"\1\2", text)
     tokens = tokenize(text)
     ents = Entities(text=text, tokens=tokens, name_tokens=[])
     spans = parse_numbers(tokens)
@@ -239,6 +253,13 @@ def classify_intent(text: str, tokens: list[str], ents: Entities | None = None) 
     # Dosage words like "दिन"/"बाद" are weak on their own; require two hits.
     if scores["DOSAGE_QUERY"] < 2:
         scores["DOSAGE_QUERY"] = 0
+    if not (ents is not None and ents.symptom) and any(re.search(p, lowered) for p in _USE_PHRASES):
+        return "USE_QUERY"
+    # "सर्दी के लिए सिट्रिज़ीन ठीक है?": a named symptom with no price / generic / dosage ask is a
+    # "is it right for this problem?" question.
+    if ents is not None and ents.symptom and not (scores["FIND_GENERIC"] or scores["PRICE_CHECK"]
+                                                  or scores["DOSAGE_QUERY"]):
+        return "VERIFY_MATCH"
     best = max(scores.items(), key=lambda kv: kv[1])
     if best[1] > 0:
         # Prefer explicit generic/price asks over verify when tied.

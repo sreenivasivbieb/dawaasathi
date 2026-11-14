@@ -7,6 +7,7 @@ spoken strength / form / release.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -14,6 +15,11 @@ from rapidfuzz import fuzz
 
 from app.db import Store
 from app.match.translit import dm_keys, normalize, skeleton, soundex, trigrams
+
+
+# Score cut for a SKU whose name has a word the speaker did not say (see _unspoken_words). Larger
+# than T2 so "Telma 40" -> "Telma 40 Tablet" is accepted over "Telma AZ 40mg/8mg Tablet".
+EXTRA_WORD_PENALTY = 0.07
 
 
 @dataclass(slots=True)
@@ -58,6 +64,7 @@ class MatchIndex:
         self.tri: dict[str, list[int]] = defaultdict(list)
         self.by_dm: dict[str, list[int]] = defaultdict(list)
         self.by_skel: dict[str, list[int]] = defaultdict(list)
+        self.weak_salts: set[str] = set()
 
     # ---------------------------------------------------------------- build
     def build(self) -> "MatchIndex":
@@ -74,7 +81,12 @@ class MatchIndex:
                 continue
             self._add(Entry(norm, kind, sorted(groups[key]), None, dm_keys(norm), skeleton(norm),
                             soundex(norm)))
-        salts = set(self.store.salt_use) | {s.name for b in self.store.brands.values() for s in b.salts}
+        core = set(self.store.salt_use) | {s.name for b in self.store.brands.values() for s in b.salts}
+        price_only = {s.name for r in self.store.price_refs for s in r.salts} - core
+        # Salts known only from the price lists are matchable, but need a close name match:
+        # a garbled transcript ("Salis") must not turn into a confirmation about "Cilastatin".
+        self.weak_salts = price_only
+        salts = core | price_only
         from app.engine.salts import all_salt_surface_forms
 
         surface = all_salt_surface_forms()
@@ -102,8 +114,15 @@ class MatchIndex:
         seen: dict[str, int] = defaultdict(int)
         for b in self.store.brands.values():
             seen[b.family.title()] += 1
-        ranked = sorted(seen.items(), key=lambda kv: -kv[1])
-        return [name for name, _ in ranked[:n]]
+        ranked = [name for name, _ in sorted(seen.items(), key=lambda kv: -kv[1])]
+        # Then single-ingredient salts that have a Jan Aushadhi / NPPA price (spoken as generics).
+        salt_count: dict[str, int] = defaultdict(int)
+        for r in self.store.price_refs:
+            if len(r.salts) == 1:
+                salt_count[r.salts[0].name.title()] += 1
+        ranked += [name for name, _ in sorted(salt_count.items(), key=lambda kv: (-kv[1], kv[0]))
+                   if name not in ranked and len(name) <= 24]
+        return ranked[:n]
 
     # ---------------------------------------------------------------- scoring
     def _candidates(self, norm: str, allowed: set[int] | None) -> set[int]:
@@ -183,11 +202,15 @@ class MatchIndex:
 
         wanted = list(strengths or ([] if strength is None else [strength]))
         query_norm = normalize(" ".join(tokens))
+        q_toks = set(query_norm.split())
+        q_compact = query_norm.replace(" ", "")
         scored: dict[str, Scored] = {}
         for idx, (ns, span) in sorted(best_entry.items(), key=lambda kv: -kv[1][0])[:25]:
             if ns < 0.55:
                 continue
             e = self.entries[idx]
+            if e.salt and e.salt in self.weak_salts and ns < 0.8:
+                continue
             if e.salt:
                 key = f"s:{e.salt}"
                 sc = Scored(key, None, e.salt, ns, 0.80 * ns + 0.10 + 0.05 + 0.03 * 0.5, span, e.norm)
@@ -213,6 +236,11 @@ class MatchIndex:
                 fm = 0.5 if form is None else (1.0 if b.form == form else 0.0)
                 rl = 0.5 if release is None else (1.0 if (b.release or "IR") == release else 0.0)
                 total = 0.80 * ns + 0.12 * st_score + 0.05 * fm + 0.03 * rl
+                if self._unspoken_words(b.base, q_toks, q_compact):
+                    total -= EXTRA_WORD_PENALTY
+                elif self._spoken_suffix(b.base, q_toks):
+                    # "Zerodol SP" said: "Zerodol-SP" outranks plain "Zerodol" by the same margin.
+                    total += EXTRA_WORD_PENALTY
                 key = f"b:{bid}"
                 sc = Scored(key, bid, None, ns, total, span, e.norm, hit,
                             fuzz.ratio(query_norm, normalize(b.name)) / 100)
@@ -239,6 +267,27 @@ class MatchIndex:
         result.candidates = ranked[:k]
         return result
 
+    @staticmethod
+    def _unspoken_words(base: str, q_toks: set[str], q_compact: str) -> bool:
+        """'Telma AZ' / 'Pan Up' / 'Glycomet GP' when the speaker said only 'Telma 40': the extra
+        name word marks a different product (often another salt), so the plain SKU should win."""
+        for t in base.split()[1:]:
+            t = normalize(t.replace("-", ""))  # same spelling rules as the query ("lc" -> "lk")
+            if not t or t.isdigit():
+                continue
+            if len(t) <= 2:
+                if t not in q_toks:
+                    return True
+            elif t not in q_compact and fuzz.partial_ratio(t, q_compact) < 85:
+                return True
+        return False
+
+    @staticmethod
+    def _spoken_suffix(base: str, q_toks: set[str]) -> bool:
+        """The brand name has a second word ('zerodol-sp', 'montair lc') that the speaker said."""
+        words = [normalize(w) for w in re.split(r"[\s\-]+", base) if w]
+        return len(words) > 1 and any(w in q_toks and not w.isdigit() for w in words[1:])
+
     def _dedupe_equivalent(self, ranked: list[Scored]) -> list[Scored]:
         """Collapse SKUs that are the same product listed twice (same base + composition)."""
         out: list[Scored] = []
@@ -246,7 +295,7 @@ class MatchIndex:
         for s in ranked:
             if s.brand_id is not None:
                 b = self.store.brands[s.brand_id]
-                sig = (b.base, b.salt_key, b.strength_key, b.form, b.release)
+                sig = (re.sub(r"[\s\-]+", " ", b.base).strip(), b.salt_key, b.strength_key, b.form, b.release)
             else:
                 sig = ("salt", s.salt)
             if sig in seen:

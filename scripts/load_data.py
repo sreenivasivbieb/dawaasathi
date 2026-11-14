@@ -86,9 +86,11 @@ def insert_brand(conn: sqlite3.Connection, name: str, composition: str, form: st
     return cur.lastrowid
 
 
-def load_brands(conn: sqlite3.Connection, rows: list[dict], meta: dict) -> int:
+def load_brands(conn: sqlite3.Connection, rows: list[dict], meta: dict, skip: set[str] | None = None) -> int:
     n = 0
     for r in rows:
+        if skip and r["name"].strip().lower() in skip:
+            continue
         bid = insert_brand(conn, r["name"], r["composition"], r.get("form"), r.get("release"),
                            _f(r.get("pack_qty")), r.get("pack_unit") or None, _f(r.get("mrp")),
                            r.get("manufacturer") or None, r.get("scheduled", "0"),
@@ -106,6 +108,8 @@ def load_az(conn: sqlite3.Connection, path: Path, as_of: str, limit: int | None)
             if str(r.get("Is_discontinued", "")).strip().upper() == "TRUE":
                 continue
             comp = " + ".join(x.strip() for x in (r.get("short_composition1"), r.get("short_composition2")) if x and x.strip())
+            # "Telmisartan (NA)" = strength not listed; left in, "na" would become part of the salt name.
+            comp = re.sub(r"\s*\(\s*NA\s*\)", "", comp)
             price_key = next((k for k in r if k and k.lower().startswith("price")), None)
             qty, unit = _pack(r.get("pack_size_label", ""))
             bid = insert_brand(conn, r["name"].strip(), comp, None, None, qty, unit, _f(r.get(price_key)) if price_key else None,
@@ -173,6 +177,9 @@ def main() -> None:
     ap.add_argument("--az-as-of", default=None)
     ap.add_argument("--az-limit", type=int, default=None)
     ap.add_argument("--keep", action="store_true", help="append instead of rebuilding")
+    ap.add_argument("--price-ref", type=Path, default=None,
+                    help="use this price_ref.csv (e.g. data/gov/price_ref.csv from scripts.import_gov) "
+                         "instead of <src>/price_ref.csv; a price_ref.meta.json next to it sets source/as-of")
     args = ap.parse_args()
 
     db = args.db or get_settings().db_path
@@ -184,15 +191,24 @@ def main() -> None:
 
     counts = {}
     load_salts(conn, _rows(args.src / "salts.csv"))
-    counts["brands"] = load_brands(conn, _rows(args.src / "brands.csv"), meta.get("brands", {}))
+    counts["brands"] = 0
+    skip: set[str] = set()
     if args.az:
+        # The A-Z list goes first; a <src>/brands.csv row with the same name is a hand-made fixture
+        # of that product and is skipped (rows only in brands.csv, e.g. demo SKUs, are kept).
         as_of = args.az_as_of or datetime.now().date().isoformat()
         counts["brands"] += load_az(conn, args.az, as_of, args.az_limit)
-        meta.setdefault("brands", {})
-        meta["brands"]["source"] = (meta["brands"].get("source", "") + " + A-Z Medicine Dataset of India").strip(" +")
-        meta["brands"]["as_of"] = meta["brands"].get("as_of") or as_of
+        skip = {row[0] for row in conn.execute("SELECT lower(name) FROM brands")}
+        # The A-Z rows are the brand DB; brands.csv only adds names missing from it (demo SKUs).
+        meta["brands"] = {"source": "A-Z Medicine Dataset of India (Kaggle, prices as of the dataset date)",
+                          "as_of": as_of}
+    counts["brands"] += load_brands(conn, _rows(args.src / "brands.csv"), meta.get("brands", {}), skip)
     counts["variants"] = load_aliases(conn, _rows(args.src / "aliases.csv"))
-    counts["price_ref"] = load_price_ref(conn, _rows(args.src / "price_ref.csv"))
+    price_path = args.price_ref or (args.src / "price_ref.csv")
+    counts["price_ref"] = load_price_ref(conn, _rows(price_path))
+    pmeta = price_path.with_name("price_ref.meta.json")
+    if args.price_ref and pmeta.exists():
+        meta["price_ref"] = json.loads(pmeta.read_text(encoding="utf-8"))
     counts["banned_fdc"] = load_banned(conn, _rows(args.src / "banned_fdc.csv"))
     nsq = _rows(args.src / "nsq_alerts.csv")
     for r in nsq:

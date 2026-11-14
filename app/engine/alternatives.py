@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.db import Store
 from app.engine.price import find_ref
-from app.engine.salts import salt_key, strength_key
+from app.engine.salts import release_class, salt_key, strength_key
 from app.models import Alternative, DrugItem
 
 
@@ -19,7 +19,7 @@ def cheaper(store: Store, item: DrugItem, k: int = 3, stale_days: int = 400) -> 
     stk = strength_key(item.salts, item.form)
     if stk is None:
         return []
-    release = item.release or "IR"
+    rc = release_class(item.release, sk)
     base_unit = item.unit_price()
 
     options: list[Alternative] = []
@@ -37,7 +37,7 @@ def cheaper(store: Store, item: DrugItem, k: int = 3, stale_days: int = 400) -> 
         b = store.brands[bid]
         if bid == item.brand_id or b.strength_key != stk or b.form != item.form:
             continue
-        if (b.release or "IR") != release or b.mrp is None or not b.pack_qty:
+        if release_class(b.release, sk) != rc or b.mrp is None or not b.pack_qty:
             continue
         key = b.name.lower()
         if key in seen_names:

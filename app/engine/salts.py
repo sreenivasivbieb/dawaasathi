@@ -37,7 +37,7 @@ _SYNONYMS: dict[str, str] = {
 }
 
 _SALT_SUFFIXES = (
-    "hydrochloride", "hcl", "trihydrate", "dihydrate", "monohydrate", "sesquihydrate",
+    "hydrochloride", "dihydrochloride", "hydrobromide", "oxalate", "hcl", "trihydrate", "dihydrate", "monohydrate", "sesquihydrate",
     "maleate", "besylate", "besilate", "sulphate", "sulfate", "phosphate", "citrate",
     "succinate", "tartrate", "mesylate", "fumarate", "bromide", "acetate", "magnesium",
     "calcium", "sodium", "potassium", "dried", "diluted", "anhydrous", "micronised",
@@ -77,6 +77,7 @@ def canonical_salt(name: str) -> str:
     if len(pieces) > 1 and pieces[-1].strip(" .:"):
         s = pieces[-1]
     s = re.sub(r"[()\[\],.:]", " ", s)
+    s = re.sub(r"\s+-+\s*|\s*-+\s*$", " ", s)  # "metformin hydrochloride - " (keep "n-acetyl")
     s = _SALT_PREFIX_NOISE.sub("", s)
     s = re.sub(r"\s+", " ", s).strip()
     if s in _SYNONYMS:
@@ -235,6 +236,23 @@ def canonical_release(text: str | None) -> str | None:
         if pattern.search(t):
             return rel
     return None
+
+
+# Single-salt PPIs exist only as gastro-resistant tablets / DR capsules, but brand lists
+# usually omit the label ("Pan 40 Tablet") while PMBJP writes "Gastro-resistant": same product.
+GASTRO_RESISTANT_ONLY = {"pantoprazole", "rabeprazole", "esomeprazole", "omeprazole", "lansoprazole",
+                         "dexlansoprazole", "ilaprazole"}
+
+
+def release_class(release: str | None, salt_key: str | None = None) -> str:
+    """Equivalence class for price lookup and cheaper alternatives. Indian labels use SR / ER /
+    PR / XR / "modified release" interchangeably for the same once-a-day products, so SR and ER
+    are one class here (the verdict engine still reports SR vs ER as RELEASE_MISMATCH).
+    With salt_key, a single PPI's IR / DR labels are one class (see GASTRO_RESISTANT_ONLY)."""
+    r = (release or "IR").upper()
+    if salt_key in GASTRO_RESISTANT_ONLY and r in ("IR", "DR"):
+        return "DR"
+    return "MR" if r in ("SR", "ER") else r
 
 
 def release_from_name(name: str) -> str:

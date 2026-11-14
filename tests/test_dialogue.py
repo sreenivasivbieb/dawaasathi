@@ -216,7 +216,7 @@ def test_symptom_and_dosage_details(store, brand_ids):
                         price=price, alternatives=alts, flags=flags, skip_detail=True)
     text = render(ctx).text
     assert "इन्फेक्शन" in text and "बुखार" in text
-    assert "सबसे सस्ता" not in text  # skip_detail: the symptom follow-up only answers the symptom
+    assert "सस्ता विकल्प" not in text  # skip_detail: the symptom follow-up only answers the symptom
     ctx = RenderContext(lang="en", status="ok", intent="DOSAGE_QUERY", verdict=verdict, item=item, safety=safety,
                         price=price, alternatives=alts, directions="1-0-1 x 5 days")
     text = render(ctx).text

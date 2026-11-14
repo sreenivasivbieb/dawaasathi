@@ -189,9 +189,34 @@ _NORM_COMPILED = [(re.compile(p), r) for p, r in _NORM_RULES]
 _DOUBLE = re.compile(r"([a-z])\1+")
 
 
+# Devanagari names of Latin letters, longest first ("एक्स" before "ए"), for brand suffixes said
+# letter by letter: "मोंटेयर एलसी" -> "monteyar lc", "ज़ेरोडोल एसपी" -> "zerodol sp".
+_LETTER_NAMES = sorted({
+    "ए": "a", "बी": "b", "सी": "c", "डी": "d", "ई": "e", "एफ": "f", "जी": "g", "एच": "h", "आई": "i",
+    "जे": "j", "के": "k", "एल": "l", "एम": "m", "एन": "n", "ओ": "o", "पी": "p", "क्यू": "q", "आर": "r",
+    "एस": "s", "टी": "t", "यू": "u", "वी": "v", "डब्ल्यू": "w", "एक्स": "x", "वाई": "y", "ज़ेड": "z",
+    "जेड": "z",
+}.items(), key=lambda kv: -len(kv[0]))
+
+
+def spell_letters(token: str) -> str | None:
+    """'एलसी' -> 'lc' when the whole token is two or more letter names; else None."""
+    out, i = [], 0
+    while i < len(token):
+        for name, latin in _LETTER_NAMES:
+            if token.startswith(name, i):
+                out.append(latin)
+                i += len(name)
+                break
+        else:
+            return None
+    return "".join(out) if len(out) >= 2 else None
+
+
 @lru_cache(maxsize=50000)
 def normalize(text: str) -> str:
     """Collapse spelling variants so 'Augmentin', 'ogmentin' and 'augmenten' land close."""
+    text = " ".join(spell_letters(t) or t for t in text.split())
     s = to_roman(text).lower()
     for pattern, repl in _NORM_COMPILED:
         s = pattern.sub(repl, s)

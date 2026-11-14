@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dawaa Saathi Live Test</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1b1f24; --muted: #5d6673; --line: #e2e5ea;
+    --accent: #0b7a5c; --accent-ink: #fff; --warn: #9a5b00; --warn-bg: #fff4e0;
+    --bad: #b42318; --bad-bg: #fde8e7; --ok-bg: #e5f5ef; --code: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1e24; --ink: #e8eaed; --muted: #9aa3ad; --line: #2b313a;
+      --accent: #2fbf8f; --accent-ink: #062018; --warn: #f0b252; --warn-bg: #33270f;
+      --bad: #ff8a80; --bad-bg: #3a1714; --ok-bg: #12291f; --code: #22272e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, "Noto Sans Devanagari", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: var(--card);
+         border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  select, input[type=text], button { font: inherit; color: inherit; }
+  select, input[type=text] { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  input[type=text] { flex: 1 1 260px; min-width: 0; }
+  button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  #mic { width: 72px; height: 72px; border-radius: 50%; font-size: 30px; background: var(--accent);
+         color: var(--accent-ink); border: none; position: relative; flex: none; }
+  #mic.rec { background: var(--bad); color: #fff; }
+  #mic .lvl { position: absolute; inset: -6px; border-radius: 50%; border: 3px solid var(--bad);
+              transform: scale(1); opacity: 0; pointer-events: none; }
+  #mic.rec .lvl { opacity: .6; }
+  .status { color: var(--muted); font-size: 14px; min-width: 160px; }
+  .turn { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-top: 14px; overflow: hidden; }
+  .turn header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px;
+                 border-bottom: 1px solid var(--line); }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--code); white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--accent); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .turn .body { padding: 12px 14px; display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; }
+  .row > b { color: var(--muted); font-weight: 600; font-size: 13px; padding-top: 1px; }
+  .row > div { min-width: 0; overflow-wrap: anywhere; }
+  .script { font-size: 17px; line-height: 1.6; }
+  code, pre { background: var(--code); border-radius: 6px; font: 12.5px/1.45 ui-monospace, monospace; }
+  code { padding: 1px 5px; }
+  pre { padding: 10px; overflow-x: auto; margin: 0; max-height: 420px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cands { display: flex; flex-wrap: wrap; gap: 8px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  audio { width: 100%; max-width: 420px; height: 36px; }
+  .err { color: var(--bad); }
+  @media (max-width: 600px) {
+    .row { grid-template-columns: 1fr; gap: 2px; }
+    .table-wrap { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dawaa Saathi Live Test</h1>
+  <p class="sub">Mic → Gnani Prisma STT → Groq LLM (समझना) → matcher + rule engine → reply → Gnani Timbre TTS.
+    माइक दबाइए, हिंदी में दवा के बारे में पूछिए, फिर दोबारा दबाकर रोकिए।</p>
+
+  <div class="bar">
+    <button id="mic" type="button" aria-label="Start recording"><span class="lvl"></span>🎤</button>
+    <div class="status" id="status">Tap to speak</div>
+    <label>Lang <select id="lang"><option value="hi">हिंदी</option><option value="en">English</option><option value="mr">मराठी</option></select></label>
+    <label><input type="checkbox" id="autoplay" checked> Auto-play reply</label>
+    <button id="reset" type="button">New session</button>
+  </div>
+  <div class="bar" style="margin-top:10px">
+    <input type="text" id="text" placeholder="या टाइप करें: डोलो 650 का सस्ता विकल्प बताओ" autocomplete="off">
+    <button id="send" class="primary" type="button">Send text</button>
+  </div>
+
+  <div id="log"></div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const micBtn = $("mic"), statusEl = $("status"), logEl = $("log");
+  let sessionId = null, rec = null, busy = false;
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const setStatus = (t) => { statusEl.textContent = t; };
+
+  // ---------------------------------------------------------------- recording (16 kHz mono WAV)
+  async function startRec() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(4096, 1, 1);
+    const chunks = [];
+    const ring = micBtn.querySelector(".lvl");
+    proc.onaudioprocess = (e) => {
+      const d = e.inputBuffer.getChannelData(0);
+      chunks.push(new Float32Array(d));
+      let peak = 0; for (let i = 0; i < d.length; i += 16) peak = Math.max(peak, Math.abs(d[i]));
+      ring.style.transform = `scale(${1 + Math.min(peak * 2.5, 0.6)})`;
+    };
+    src.connect(proc); proc.connect(ctx.destination);
+    rec = { stream, ctx, src, proc, chunks, t0: performance.now() };
+    micBtn.classList.add("rec"); micBtn.setAttribute("aria-label", "Stop recording");
+    setStatus("Listening… tap to stop");
+  }
+
+  async function stopRec() {
+    const r = rec; rec = null;
+    micBtn.classList.remove("rec"); micBtn.setAttribute("aria-label", "Start recording");
+    r.proc.disconnect(); r.src.disconnect(); r.stream.getTracks().forEach((t) => t.stop());
+    const rate = r.ctx.sampleRate; await r.ctx.close();
+    const len = r.chunks.reduce((n, c) => n + c.length, 0);
+    if (len < rate * 0.3) { setStatus("Too short, try again"); return null; }
+    const all = new Float32Array(len); let o = 0;
+    for (const c of r.chunks) { all.set(c, o); o += c.length; }
+    const off = new OfflineAudioContext(1, Math.ceil(len * 16000 / rate), 16000);
+    const buf = off.createBuffer(1, len, rate); buf.copyToChannel(all, 0);
+    const s = off.createBufferSource(); s.buffer = buf; s.connect(off.destination); s.start();
+    const out = (await off.startRendering()).getChannelData(0);
+    return { wav: toWav(out, 16000), seconds: len / rate };
+  }
+
+  function toWav(f32, sr) {
+    const b = new ArrayBuffer(44 + f32.length * 2), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + f32.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true);
+    v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data");
+    v.setUint32(40, f32.length * 2, true);
+    for (let i = 0; i < f32.length; i++) {
+      const x = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+    }
+    return new Blob([b], { type: "audio/wav" });
+  }
+
+  // ---------------------------------------------------------------- API
+  async function query({ wav, text, label }) {
+    busy = true; micBtn.disabled = true; $("send").disabled = true;
+    setStatus("Thinking…");
+    const fd = new FormData();
+    fd.append("lang", $("lang").value);
+    if (sessionId) fd.append("session_id", sessionId);
+    if (wav) fd.append("audio", wav, "q.wav"); else fd.append("text", text);
+    const t0 = performance.now();
+    try {
+      const r = await fetch("/v1/query", { method: "POST", body: fd });
+      const j = await r.json();
+      render(j, { label, wav, wall: performance.now() - t0 });
+    } catch (e) {
+      renderError(String(e));
+    } finally {
+      busy = false; micBtn.disabled = false; $("send").disabled = false; setStatus("Tap to speak");
+    }
+  }
+
+  async function confirm(candidateId, none) {
+    if (!sessionId) return;
+    setStatus("Thinking…");
+    const t0 = performance.now();
+    try {
+      const r = await fetch("/v1/confirm", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, candidate_id: candidateId, none: !!none, lang: $("lang").value }) });
+      render(await r.json(), { label: none ? "(none of these)" : `(chose ${candidateId})`, wall: performance.now() - t0 });
+    } catch (e) { renderError(String(e)); }
+    setStatus("Tap to speak");
+  }
+
+  // ---------------------------------------------------------------- rendering
+  function pill(text, cls) { return `<span class="pill ${cls || ""}">${esc(text)}</span>`; }
+  function row(label, html) { return html ? `<div class="row"><b>${esc(label)}</b><div>${html}</div></div>` : ""; }
+  const money = (x) => x == null ? "–" : "₹" + Number(x).toFixed(2);
+
+  function renderError(msg) {
+    logEl.insertAdjacentHTML("afterbegin", `<section class="turn"><div class="body err">${esc(msg)}</div></section>`);
+  }
+
+  function render(j, { label, wav, wall }) {
+    if (j.error) { renderError(`${j.error.code || "ERROR"}: ${j.error.message || JSON.stringify(j.error)}`); return; }
+    sessionId = j.session_id || sessionId;
+    const ds = j.data_sources || {}, llm = ds.llm || {}, asr = ds.asr || {}, tm = j.timings_ms || {};
+    const st = j.status, stCls = st === "ok" ? "ok" : (st === "error" ? "bad" : "warn");
+    const v = j.verdict || {};
+    let html = `<header>${pill(st, stCls)}${j.intent ? pill(j.intent) : ""}${v.code ? pill(v.code, v.code === "BANNED_COMBINATION" ? "bad" : "") : ""}
+      ${pill(`pipeline ${Math.round(tm.total ?? 0)} ms`)}${pill(`wall ${Math.round(wall)} ms`)}${pill("tts: " + (j.tts || "–"))}</header><div class="body">`;
+
+    if (wav) html += row("Your audio", `<audio controls src="${URL.createObjectURL(wav)}"></audio>`);
+    else if (label) html += row("You sent", esc(label));
+    html += row("Transcript", j.transcript ? `<span class="script">${esc(j.transcript)}</span>` +
+      (asr.model ? ` ${pill(asr.model)} ${pill((tm.asr ?? "–") + " ms")}` : "") : "");
+    if (asr.dual?.length) html += row("Dual ASR", asr.dual.map((d) =>
+      `${pill(d.model)} score ${d.score} · ${d.ms} ms · ${esc(d.text)}`).join("<br>"));
+    if (ds.error) html += row("Error", `<span class="err">${esc(JSON.stringify(ds.error))}</span>`);
+
+    const nlu = llm.nlu;
+    if (nlu) html += row("LLM understand", nlu.error ? `<span class="err">${esc(nlu.error)}</span>` :
+      `${pill(nlu.used ? "used" : "rule NLU kept", nlu.used ? "ok" : "")} ${pill(nlu.ms + " ms")}<br><code>${esc(JSON.stringify(nlu.output))}</code>`);
+
+    const wu = llm.web_uses;
+    if (wu) html += row("Web lookup", wu.found
+      ? `${pill(wu.source, "ok")} ${pill((wu.uses || []).join(", "))} ${pill(wu.cached ? "cached" : (wu.ms + " ms"))}<br>
+         <small>“${esc(wu.evidence)}”<br><a href="${esc(wu.url)}" target="_blank" rel="noopener">${esc(wu.url)}</a></small>`
+      : pill("no trusted source found", "warn"));
+
+    const m = j.match;
+    if (m) html += row("Matched", `<b>${esc(m.brand)}</b> ${pill("conf " + m.confidence)} ${pill("heard: " + m.heard)} ${pill(m.source)}`);
+    const f = v.facts || {};
+    if (f.salts) html += row("Contains", esc(f.salts.join(" + ")) + ` · ${esc(f.form || "")} ${esc(f.release || "")}` +
+      (f.mrp != null ? ` · MRP ${money(f.mrp)} / ${f.pack_qty ?? "?"}` : ""));
+
+    if (j.candidates?.length) {
+      html += row("Did you mean", `<div class="cands">${j.candidates.map((c) =>
+        `<button type="button" data-cand="${esc(c.candidate_id)}">${esc(c.label)} <small>(${c.confidence})</small></button>`).join("")}
+        <button type="button" data-none="1">None of these</button></div>`);
+    }
+
+    const p = j.price;
+    if (p && (p.mrp != null || p.reference != null || p.nppa_ceiling_unit != null)) {
+      html += row("Price", `MRP ${money(p.mrp)} / ${p.pack_qty ?? "?"} · Jan Aushadhi ${money(p.reference)} / ${p.reference_pack_qty ?? "?"}` +
+        (p.ratio ? ` · ${p.ratio}×` : "") + (p.nppa_ceiling_unit != null ? ` · NPPA ceiling ${money(p.nppa_ceiling_unit)}/unit` : "") +
+        (p.above_ceiling ? " " + pill("above ceiling", "bad") : (p.above_ceiling === false ? " " + pill("within ceiling", "ok") : "")));
+    }
+
+    if (j.alternatives?.length) {
+      html += row("Alternatives", `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Price</th><th>Pack</th><th>Per unit</th><th>Saves</th><th>Source</th></tr></thead><tbody>${
+        j.alternatives.map((a) => `<tr><td>${a.is_jan_aushadhi ? pill("JA", "ok") + " " : ""}${esc(a.name)}</td><td class="n">${money(a.price)}</td>
+        <td class="n">${a.pack_qty ?? "–"}</td><td class="n">${money(a.unit_price)}</td><td class="n">${a.saves_pct != null ? a.saves_pct + "%" : "–"}</td>
+        <td><small>${esc(a.source)} (${esc(a.as_of || "")})</small></td></tr>`).join("")}</tbody></table></div>`);
+    }
+    if (j.flags?.length) html += row("Flags", j.flags.map((x) => pill(typeof x === "string" ? x : (x.code || JSON.stringify(x)), "warn")).join(" "));
+
+    const rep = llm.reply;
+    if (rep) html += row("LLM reply", rep.error ? `<span class="err">${esc(rep.error)}</span>` :
+      `${pill(rep.used ? "used" : "rejected → template", rep.used ? "ok" : "warn")} ${pill(rep.ms + " ms")}` +
+      (rep.rejected ? ` <small>${esc(JSON.stringify(rep.rejected))}</small><br><small>LLM said: ${esc(rep.candidate || "")}</small>` : ""));
+
+    const audioId = `a_${j.audio_id}`;
+    html += row("Reply", `<div class="script">${esc(j.script?.text || "")}</div>` +
+      (j.audio_id ? `<audio id="${audioId}" controls preload="none" src="/v1/audio/${j.audio_id}.wav"></audio>` : ""));
+    if (j.script?.chemist_text) html += row("For chemist", esc(j.script.chemist_text));
+
+    html += row("Timings", `<code>${esc(JSON.stringify(Object.fromEntries(Object.entries(tm).filter(([, x]) => x != null))))}</code>`);
+    if (ds.brands) html += row("Data", `<small>brands: ${esc(ds.brands.source)} (${esc(ds.brands.as_of)}, ${ds.brands.rows} rows) · price: ${esc(ds.price_ref?.source || "")} (${esc(ds.price_ref?.as_of || "")})</small>`);
+    html += `<details><summary>Raw JSON</summary><pre>${esc(JSON.stringify(j, null, 2))}</pre></details></div>`;
+
+    const sec = document.createElement("section");
+    sec.className = "turn"; sec.innerHTML = html;
+    sec.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => confirm(b.dataset.cand)));
+    sec.querySelectorAll("[data-none]").forEach((b) => b.addEventListener("click", () => confirm(null, true)));
+    logEl.prepend(sec);
+    const a = document.getElementById(audioId);
+    if (a && $("autoplay").checked) a.play().catch(() => {});
+  }
+
+  // ---------------------------------------------------------------- wiring
+  micBtn.addEventListener("click", async () => {
+    if (busy) return;
+    if (!rec) {
+      try { await startRec(); }
+      catch (e) { setStatus("Mic blocked: " + e.message); }
+      return;
+    }
+    const out = await stopRec();
+    if (out) await query({ wav: out.wav, label: `${out.seconds.toFixed(1)} s audio` });
+  });
+  $("send").addEventListener("click", () => { const t = $("text").value.trim(); if (t) query({ text: t, label: t }); });
+  $("text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("send").click(); });
+  $("reset").addEventListener("click", () => { sessionId = null; logEl.innerHTML = ""; setStatus("New session. Tap to speak"); });
+  if (!window.isSecureContext) setStatus("Mic needs https or localhost");
+})();
+</script>
+</body>
+</html>

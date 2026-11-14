@@ -263,7 +263,7 @@ def test_symptom_check(store):
     assert checks.symptom_check(store, aug, "fever").code == "SYMPTOM_MISMATCH"
     assert checks.symptom_check(store, aug, None) is None
     unknown = DrugItem(source="voice", salts=[SaltDose(name="unobtainium")])
-    assert checks.symptom_check(store, unknown, "fever") is None
+    assert checks.symptom_check(store, unknown, "fever").code == "SYMPTOM_UNKNOWN"
 
 
 def test_dup_salt():

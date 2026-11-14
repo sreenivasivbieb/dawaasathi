@@ -17,21 +17,25 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.adapters.gnani_stt import STTError
+from app.adapters.llm import GroqLLM, LLMError, nlu_to_text
 from app.adapters.ocr import OCRItem, OCRReader
 from app.config import Settings
 from app.db import Store
 from app.dialogue import guard
-from app.dialogue.templates import RenderContext, brand_display, render
+from app.dialogue.templates import RenderContext, Segment, brand_display, render
+from app.dialogue.templates import load as load_templates
 from app.dialogue.verbalize import speakable
 from app.engine import alternatives as altmod
 from app.engine import checks, price as pricemod, rules, safety as safetymod
+from app.engine.web_uses import WebUseLookup
 from app.engine.salts import (canonical_form, canonical_release, canonical_salt, parse_composition,
                               salt_key, strength_key)
 from app.match.index import MatchIndex, MatchResult, Scored
 from app.metrics import METRICS, log_event
 from app.models import (Candidate, Card, DrugItem, Flag, QueryResponse, SafetyResult, SaltDose, Script,
                         Verdict)
-from app.nlu.entities import Entities, extract
+from app.nlu.entities import Entities, extract, tokenize
+from app.nlu.numbers import parse_numbers
 from app.api.sessions import Session, SessionStore
 from app.tts.cache import AudioService
 
@@ -70,6 +74,18 @@ class Turn:
     match_info: dict[str, Any] | None = None
     followup: str | None = None
     ocr_meta: dict[str, Any] = field(default_factory=dict)
+    llm_meta: dict[str, Any] = field(default_factory=dict)
+
+
+# If the template names one of these, the reworded reply must keep it (a dropped "at Jan Aushadhi"
+# turns the generic's price into the user's own medicine's price; the number guard cannot see that).
+ANCHORS = (("जन औषधि", "jan aushadhi", "जन औषधी"), ("सरकारी", "nppa", "government"),
+           ("प्रतिबंधित", "banned", "प्रतिबंधित यादी"), ("पक्का नहीं", "not sure", "खात्री", "पक्की जाँच"),
+           ("बचत", "save", "saving"), ("गुणवत्ता", "quality"))
+
+# Phrases a reworded reply may never contain (unless the template itself said it).
+FORBIDDEN = ("बंद कर", "बंद करें", "मत लें", "मत लीजिए", "मत खाइए", "धोखा", "नकली", "फ्रॉड", "थांबव", "घेऊ नका",
+             "stop taking", "do not take", "don't take", "fraud", "fake", "cheat", "scam")
 
 
 def _ents_summary(e: Entities | None) -> dict[str, Any]:
@@ -81,8 +97,11 @@ def _ents_summary(e: Entities | None) -> dict[str, Any]:
 
 class Pipeline:
     def __init__(self, settings: Settings, store: Store, index: MatchIndex, stt, ocr: OCRReader,
-                 audio: AudioService, sessions: SessionStore):
+                 audio: AudioService, sessions: SessionStore, llm: GroqLLM | None = None,
+                 web_uses: WebUseLookup | None = None):
         self.s = settings
+        self.llm = llm
+        self.web_uses = web_uses
         self.store = store
         self.index = index
         self.stt = stt
@@ -100,6 +119,7 @@ class Pipeline:
                                             "script": None, "tts_first_chunk": None}
 
         ocr_meta: dict[str, dict] = {}
+        asr_meta: dict[str, Any] = {}
 
         async def run_asr() -> str | None:
             if inp.text:
@@ -107,8 +127,13 @@ class Pipeline:
             if not inp.audio:
                 return None
             t0 = time.perf_counter()
-            res = await self.stt.transcribe(inp.audio, inp.audio_name, inp.lang, self.keyterms,
-                                            session.last_transcript)
+            if not self.s.stt_dual:
+                res = await self.stt.transcribe(inp.audio, inp.audio_name, inp.lang, self.keyterms,
+                                                session.last_transcript)
+                asr_meta["model"] = res.model or self.s.stt_model
+            else:
+                res, dual_meta = await self._dual_asr(inp, session.last_transcript)
+                asr_meta.update(dual_meta)
             timings["asr"] = round((time.perf_counter() - t0) * 1000, 1)
             METRICS.observe("asr", timings["asr"])
             return res.text
@@ -136,8 +161,11 @@ class Pipeline:
             METRICS.count("asr_error")
             log_event("asr_error", session=session.id, error=getattr(asr_r, "code", type(asr_r).__name__))
             if not inp.strip and not inp.rx:
-                return self._finish_simple(session, inp, "error", timings, t_start, error_kind="stt",
-                                           error_code=getattr(asr_r, "code", "STT_ERROR"))
+                code = getattr(asr_r, "code", "STT_ERROR")
+                # A busy / unreachable STT service is not the caller's unclear voice: say "try again later".
+                service = getattr(asr_r, "retryable", False) or code in ("RATE_LIMITED", "NETWORK")
+                return self._finish_simple(session, inp, "error", timings, t_start,
+                                           error_kind="service" if service else "stt", error_code=code)
         else:
             transcript = asr_r
         for r in (strip_r, rx_r):
@@ -147,6 +175,11 @@ class Pipeline:
         rx_res = None if isinstance(rx_r, BaseException) else rx_r
 
         ents = extract(transcript) if transcript else None
+        llm_meta: dict[str, Any] = {}
+        if asr_meta:
+            llm_meta["asr"] = asr_meta
+        if transcript and not session.pending and self.llm is not None and self.s.llm_nlu:
+            ents = await self._llm_understand(transcript, ents, inp.lang, timings, llm_meta)
         if transcript:
             session.last_transcript = transcript
         session.turns += 1
@@ -184,7 +217,8 @@ class Pipeline:
 
         turn = Turn(lang=inp.lang, transcript=transcript, ents=_ents_summary(ents), strip_item=strip_item,
                     rx_items=rx_items, voice_item=None, chosen_rx=None, pouch=inp.pouch, timings=timings,
-                    channel=inp.channel, tts_sample_rate=inp.tts_sample_rate, ocr_meta=ocr_meta)
+                    channel=inp.channel, tts_sample_rate=inp.tts_sample_rate, ocr_meta=ocr_meta,
+                    llm_meta=llm_meta)
 
         # ---- voice -> brand
         if ents and ents.name_tokens:
@@ -223,6 +257,113 @@ class Pipeline:
                                        "error", timings, t_start, error_code="UNKNOWN_CANDIDATE")
         return await self._resume(session, ids.index(candidate_id), timings, t_start, None)
 
+    async def _dual_asr(self, inp: QueryInput, previous: str | None):
+        """Two Prisma models in parallel; keep the transcript whose drug reading the DB matches best
+        (ties go to the primary model). Same latency, twice the STT credits."""
+        models = [self.s.stt_model, self.s.stt_model_2]
+        results = await asyncio.gather(*[
+            self.stt.transcribe(inp.audio, inp.audio_name, inp.lang, self.keyterms, previous, model=m)
+            for m in models], return_exceptions=True)
+        ok = [(m, r) for m, r in zip(models, results) if not isinstance(r, BaseException)]
+        if not ok:
+            raise results[0]
+        scored = [(self._top_score(extract(r.text)) if r.text else 0.0, -i, m, r) for i, (m, r) in enumerate(ok)]
+        best = max(scored, key=lambda x: (x[0], x[1]))
+        inp_meta = {"model": best[2], "dual": [{"model": m, "text": r.text, "score": sc, "ms": round(r.latency_ms)}
+                                               for sc, _, m, r in scored]}
+        METRICS.count(f"asr_dual_pick_{best[2]}")
+        return best[3], inp_meta
+
+    # ================================================================== LLM
+    async def _llm_understand(self, transcript: str, ents: Entities, lang: str, timings: dict,
+                              meta: dict) -> Entities:
+        """Ask the LLM what was said; keep whichever reading (rules or LLM) the DB matches better."""
+        try:
+            res = await self.llm.understand(transcript, lang)
+        except (LLMError, KeyError, ValueError) as exc:
+            meta["nlu"] = {"used": False, "error": str(exc)[:200]}
+            METRICS.count("llm_nlu_error")
+            return ents
+        timings["llm_nlu"] = res.latency_ms
+        METRICS.observe("llm_nlu", res.latency_ms)
+        nlu = res.data
+        meta["nlu"] = {"used": False, "model": res.model, "ms": res.latency_ms, "output": nlu}
+        chosen = ents
+        text = nlu_to_text(nlu)
+        if text:
+            alt = extract(text)
+            rule_top = self._top_score(ents)
+            llm_top = self._top_score(alt)
+            meta["nlu"].update(rule_score=rule_top, llm_score=llm_top, llm_text=text)
+            # Equal name scores (salt names score the same with or without a number): prefer the
+            # reading that also carries the strength, e.g. ASR "Tellmisartan Salis" -> LLM "Telmisartan 40".
+            gains_strength = bool(alt.strengths) and not ents.strengths and llm_top >= rule_top - 0.02
+            # ASR split one name into pieces ("टेल मी साट इन 40"): the rule reading then fuzzily hits a
+            # short brand ("Tel 40mg") but cannot decide; the LLM's joined name resolves on its own.
+            rejoined = (llm_top >= self.s.match_t1 and self._confident(alt) and not self._confident(ents))
+            if llm_top > rule_top + 1e-9 or gains_strength or rejoined:
+                alt.text, alt.tokens = ents.text, ents.tokens
+                alt.ordinal, alt.yes, alt.no = ents.ordinal, ents.yes, ents.no
+                chosen = alt
+                meta["nlu"]["used"] = True
+        if nlu.get("intent") and nlu["intent"] != "CLARIFY":
+            chosen.intent = nlu["intent"]
+        # The LLM sometimes names the drug's usual condition ("Glycomet" -> diabetes) although the
+        # speaker never mentioned one; only a "is it right for ..." question carries a symptom.
+        llm_symptom = nlu.get("symptom") if nlu.get("intent") == "VERIFY_MATCH" else None
+        chosen.symptom = ents.symptom or llm_symptom
+        return chosen
+
+    def _search_ents(self, e: Entities):
+        return self.index.search(e.name_tokens, strength=e.strength, strengths=e.strengths, form=e.form,
+                                 release=e.release, t1=self.s.match_t1, t2=self.s.match_t2)
+
+    def _top_score(self, e: Entities | None) -> float:
+        if e is None or not e.name_tokens:
+            return 0.0
+        res = self._search_ents(e)
+        return round(res.top.score, 4) if res.top else 0.0
+
+    def _confident(self, e: Entities | None) -> bool:
+        return bool(e is not None and e.name_tokens and self._search_ents(e).confident)
+
+    async def _llm_rewrite(self, ctx: RenderContext, turn: Turn, facts: dict) -> str | None:
+        rendered = render(ctx)
+        doctor = load_templates(ctx.lang)["lines"]["doctor"]
+        try:
+            res = await self.llm.phrase(rendered.text, facts, ctx.lang, doctor)
+        except (LLMError, KeyError, ValueError) as exc:
+            turn.llm_meta["reply"] = {"used": False, "error": str(exc)[:200]}
+            METRICS.count("llm_reply_error")
+            return None
+        turn.timings["llm_reply"] = res.latency_ms
+        METRICS.observe("llm_reply", res.latency_ms)
+        turn.llm_meta["reply"] = {"model": res.model, "ms": res.latency_ms, "candidate": res.data["text"]}
+        return res.data["text"] or None
+
+    def _rewrite_problems(self, text: str, template_text: str, doctor: str, sources: list) -> list[str]:
+        problems = []
+        g = guard.validate(text, *sources)
+        if not g.ok:
+            problems.append(f"guard: numbers={g.bad_numbers} salts={g.bad_salts}")
+        allowed, _ = guard.allowed_facts(*sources)
+        word_nums = [sp.value for sp in parse_numbers(tokenize(re.sub(r"\d+(?:\.\d+)?", " ", text)))]
+        bad_words = [v for v in word_nums if round(float(v), 4) not in allowed and v not in (1, 2)]
+        if bad_words:
+            problems.append(f"number words not in facts: {bad_words}")
+        low, tlow = text.lower(), template_text.lower()
+        hits = [w for w in FORBIDDEN if w in low and w not in tlow]
+        if hits:
+            problems.append(f"forbidden: {hits}")
+        for group in ANCHORS:
+            if any(a in tlow for a in group) and not any(a in low for a in group):
+                problems.append(f"dropped: {group[0]}")
+        if not text.strip().endswith(doctor.strip()):
+            problems.append("missing doctor line")
+        if len(text.split()) > 60:
+            problems.append("too long")
+        return problems
+
     # ================================================================== matching
     def _match_voice(self, ents: Entities, turn: Turn, session: Session) -> dict | None:
         image_items = [i for i in [turn.strip_item, *turn.rx_items] if i is not None]
@@ -259,6 +400,13 @@ class Pipeline:
                         self.store.brands[c.brand_id].family == self.store.brands[top.brand_id].family]
             if len(siblings) > 1:
                 needs = True
+        uses_question = (ents.intent == "VERIFY_MATCH" and ents.symptom) or ents.intent == "USE_QUERY"
+        if (needs and lasa is None and uses_question and top.score >= self.s.match_t1
+                and self._same_salts(res.candidates[:2])):
+            # "शुगर के लिए Glycomet?": Glycomet 500 vs 250 have one usual use; asking which is noise.
+            needs = False
+        if needs and res.reason == "close_second" and lasa is None and self._spoken_disambiguates(res, ents):
+            needs = False
         if not needs:
             turn.voice_item = self._scored_to_item(top, ents)
             turn.match_info = self._match_info(top, "voice")
@@ -267,6 +415,56 @@ class Pipeline:
         if lasa is not None and all(c.key != lasa.key for c in cands):
             cands = [cands[0], lasa] + cands[1:]
         return {"kind": "voice", "candidates": cands[:3], "reason": res.reason if not lasa else "look_alike"}
+
+    async def _use_flags(self, target: DrugItem, symptom: str | None, intent: str, turn: Turn) -> list[Flag]:
+        """Symptom check / "what is it for?" from salts.usual_use, else from a trusted web source."""
+        if not target.salts or not (symptom or intent == "USE_QUERY"):
+            return []
+        uses = checks.usual_uses(self.store, target)
+        web = None
+        if uses is None and self.web_uses is not None and self.s.web_lookup:
+            found = await self.web_uses.lookup(target)
+            turn.llm_meta["web_uses"] = ({"found": False} if found is None else
+                                         {"found": True, "uses": found.uses, "source": found.source,
+                                          "url": found.url, "evidence": found.evidence, "cached": found.cached,
+                                          "fetched_at": found.fetched_at, "ms": found.ms})
+            if found is not None:
+                if found.ms is not None:
+                    turn.timings["web_uses"] = found.ms
+                uses = found.uses
+                web = {"source": found.source, "url": found.url}
+        if symptom:
+            if uses is None:
+                return [Flag(code="SYMPTOM_UNKNOWN", detail="usual use of this salt is not in the data",
+                             facts={"symptom": symptom})]
+            return [checks.symptom_flag(symptom, uses, web)]
+        return [checks.use_flag(uses, web)]
+
+    def _same_salts(self, cands: list[Scored]) -> bool:
+        sets = []
+        for c in cands:
+            if c.brand_id is not None:
+                sets.append(frozenset(s.name for s in self.store.brands[c.brand_id].salts))
+            elif c.salt:
+                sets.append(frozenset([c.salt]))
+        return len(sets) == len(cands) and len(set(sets)) == 1 and bool(sets[0])
+
+    def _spoken_disambiguates(self, res: MatchResult, ents: Entities) -> bool:
+        """'Glycomet SR 500': top and #2 are sibling SKUs and only the top one has the spoken
+        release / form / strength, so asking "SR or plain?" would repeat the user's own words."""
+        if len(res.candidates) < 2 or res.top.brand_id is None or res.candidates[1].brand_id is None:
+            return False
+        a, b = self.store.brands[res.top.brand_id], self.store.brands[res.candidates[1].brand_id]
+        if a.family != b.family:
+            return False
+        said = []
+        if ents.release:
+            said.append(((a.release or "IR") == ents.release, (b.release or "IR") == ents.release))
+        if ents.form:
+            said.append((a.form == ents.form, b.form == ents.form))
+        if ents.strengths:
+            said.append((bool(res.top.strength_ok), bool(res.candidates[1].strength_ok)))
+        return bool(said) and all(x for x, _ in said) and any(not y for _, y in said)
 
     def _lasa_partner(self, top: Scored) -> Scored | None:
         keys: list[str] = []
@@ -304,6 +502,10 @@ class Pipeline:
             b = self.store.brands[bid]
             if strength_key(item.salts, b.form) == b.strength_key and b.form:
                 forms[b.form] = forms.get(b.form, 0) + 1
+        if not forms:  # no brand of this strength in the DB: use the government price lists
+            for ref in self.store.price_refs:
+                if ref.salt_key == sk and ref.form and strength_key(item.salts, ref.form) == ref.strength_key:
+                    forms[ref.form] = forms.get(ref.form, 0) + (2 if ref.form in ("tablet", "capsule") else 1)
         return max(forms, key=forms.get) if forms else None
 
     def _match_info(self, sc: Scored, source: str) -> dict:
@@ -321,7 +523,9 @@ class Pipeline:
     def _candidate(self, sc: Scored, idx: int) -> Candidate:
         if sc.brand_id is not None:
             b = self.store.brands[sc.brand_id]
-            return Candidate(candidate_id=f"c{idx}_b{b.id}", brand_id=b.id, brand=b.name, label=brand_display(b.name),
+            # Keep "Drops" / "Suspension" in the label: "Crocin" vs "Crocin 1000mg" is no choice at all.
+            label = brand_display(b.name, keep_form=b.form not in (None, "tablet", "capsule"))
+            return Candidate(candidate_id=f"c{idx}_b{b.id}", brand_id=b.id, brand=b.name, label=label,
                              confidence=round(sc.score, 3))
         return Candidate(candidate_id=f"c{idx}_s", brand=sc.salt.title(), label=sc.salt.title(),
                          confidence=round(sc.score, 3), source="salt")
@@ -530,7 +734,9 @@ class Pipeline:
                                      candidates=cands,
                                      guard_sources=[c.model_dump() for c in cands] + [{"rx_count": len(cands)}])
         elif turn.voice_item:
-            if intent == "VERIFY_MATCH":
+            # "सर्दी के लिए पैरासिटामोल सही है?" names a symptom: answer it from the salt's usual use.
+            # Without one, "is it right / the same?" means strip vs prescription, which needs the photos.
+            if intent == "VERIFY_MATCH" and not turn.ents.get("symptom"):
                 session.last_item = turn.voice_item
                 session.last_context = self._context_dict(turn)
                 ctx = RenderContext(lang=turn.lang, status="needs_image", needs_image_kind="verify")
@@ -556,7 +762,7 @@ class Pipeline:
             flags.append(Flag(code="POSSIBLE_BANNED", facts={"notification_ref": safety.notification_ref}))
         for f in (
             checks.dup_salt(target, turn.pouch),
-            checks.symptom_check(self.store, target, turn.ents.get("symptom")),
+            *(await self._use_flags(target, turn.ents.get("symptom"), intent, turn)),
             checks.look_alike(self.store, target) if target.source == "voice" else None,
         ):
             if f is not None:
@@ -584,11 +790,25 @@ class Pipeline:
             lang=turn.lang, status=status, intent=intent, verdict=verdict, item=target, prescribed=prescribed,
             dispensed=dispensed, safety=safety, price=price, alternatives=spoken_alts,
             flags=[f for f in flags if f.code not in {fl.code for fl in verdict.flags}] + verdict.flags,
-            directions=directions, skip_detail=turn.followup == "symptom",
+            # A "is it right for <symptom>?" question gets the symptom answer, not the price detail.
+            directions=directions, skip_detail=turn.followup == "symptom" or intent == "USE_QUERY" or (
+                intent == "VERIFY_MATCH" and bool(turn.ents.get("symptom"))),
         )
+        rewrite = None
+        # "Is it right for <symptom>?" answers are medical claims: the vetted template speaks them as is.
+        # (A rewrite turned "cold is not its usual use" into "not taken in a cold", which the guard can't see.)
+        symptom_answer = any(f.code.startswith(("SYMPTOM_", "USE_")) for f in flags)
+        if self.llm is not None and self.s.llm_reply and not symptom_answer:
+            facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
+                                                                                        "release", "mrp", "pack_qty"}),
+                     "price": price.model_dump(exclude_none=True),
+                     "alternatives": [a.model_dump(include={"name", "price", "pack_qty", "saves_pct"})
+                                      for a in spoken_alts[:1]],
+                     "flags": [f.code for f in flags]}
+            rewrite = await self._llm_rewrite(ctx, turn, facts)
         return self._respond(session, turn, ctx, status=status, t_start=t_start, verdict=verdict,
                              safety=safety, price=price, alternatives=alts, flags=flags, focus=focus,
-                             prescribed=prescribed, dispensed=dispensed, target=target)
+                             prescribed=prescribed, dispensed=dispensed, target=target, rewrite=rewrite)
 
     def _context_dict(self, turn: Turn) -> dict:
         return {"ents": dict(turn.ents), "strip_item": turn.strip_item, "rx_items": turn.rx_items,
@@ -610,7 +830,7 @@ class Pipeline:
     def _respond(self, session: Session, turn: Turn, ctx: RenderContext, status: str, t_start: float,
                  verdict: Verdict | None = None, safety: SafetyResult | None = None, price=None,
                  alternatives=None, flags=None, candidates=None, focus=None, prescribed=None, dispensed=None,
-                 target=None, guard_sources=None) -> QueryResponse:
+                 target=None, guard_sources=None, rewrite: str | None = None) -> QueryResponse:
         t0 = time.perf_counter()
         rendered = render(ctx)
         sources = [verdict.model_dump() if verdict else None, safety.model_dump() if safety else None,
@@ -626,6 +846,21 @@ class Pipeline:
             log_event("guard_fallback", session=session.id, bad_numbers=g.bad_numbers, bad_salts=g.bad_salts)
             segments = rendered.plain_segments
             text = " ".join(s.text for s in segments)
+        if rewrite is not None:
+            doctor = load_templates(ctx.lang)["lines"]["doctor"]
+            problems = self._rewrite_problems(rewrite, rendered.text, doctor, sources)
+            turn.llm_meta.setdefault("reply", {})
+            turn.llm_meta["reply"].update(used=not problems, rejected=problems or None)
+            if problems:
+                METRICS.count("llm_reply_rejected")
+                log_event("llm_reply_rejected", session=session.id, problems=problems)
+            else:
+                METRICS.count("llm_reply_used")
+                body = rewrite.strip()
+                while body.endswith(doctor.strip()):  # the LLM sometimes repeats the closing line
+                    body = body[: -len(doctor.strip())].strip()
+                segments = [Segment(body, "dynamic"), Segment(doctor, "fixed")]
+                text = f"{body} {doctor}"
         chemist = rendered.chemist_text
         if chemist and not guard.validate(chemist, *sources).ok:
             chemist = ""
@@ -663,6 +898,12 @@ class Pipeline:
         )
         if turn.ocr_meta:
             resp.data_sources["ocr"] = turn.ocr_meta
+        if turn.llm_meta:
+            meta = dict(turn.llm_meta)
+            if "asr" in meta:
+                resp.data_sources["asr"] = meta.pop("asr")
+            if meta:
+                resp.data_sources["llm"] = meta
         total = round((time.perf_counter() - t_start) * 1000, 1)
         resp.timings_ms["total"] = total
         METRICS.observe("total", total)
