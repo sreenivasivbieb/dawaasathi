@@ -49,9 +49,10 @@ labelled; alternatives retain the backend's order and source labels.
 Machine-readable results: [live user flows](../artifacts/user-flow-checks.json) and
 [DOM actions](../artifacts/web-action-checks.json).
 
-These are separate from visual or device validation. The browser-control host was unavailable,
-so desktop/mobile rendering, physical microphone/camera capture, and audible playback were not
-verified in a browser. DOM checks do not establish those results.
+These are separate from visual or device validation. The original DOM checks did not verify rendering. Subsequently, user-authorized local Chromium
+captured and verified representative desktop/mobile screens and the real sample-image comparison;
+see [screenshot provenance](screenshots/README.md). Physical microphone/camera capture and audible
+playback remain unverified. DOM checks do not establish those device results.
 
 The running configuration reported **STT mock, TTS mock, OCR rapidocr**. No adapter was replaced
 with a test fake for the live checks, but live speech providers were not configured or verified.

@@ -65,3 +65,52 @@ def test_empty_transcript_has_a_recoverable_speech_error(make_client):
     assert result["status"] == "error"
     assert result["data_sources"]["error"]["code"] == "NO_SPEECH"
     assert result["match"] is None
+
+
+@pytest.mark.parametrize("question", ["Dolo 650 price", "Dolo 650 used for", "zzzyyyqqq 777 price", "Glycomet"])
+def test_voice_requests_bypass_optional_text_helpers(make_client, monkeypatch, question):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.engine import checks
+
+    client = make_client(stt=DetectedSTT("en-IN", question))
+    pipeline = client.app.state.pipeline
+    pipeline.s = replace(pipeline.s, groq_api_keys=("test-only-not-a-real-key",),
+                         llm_mode="both", tavily_api_key="test-only", web_lookup_on=True, web_brands_on=True)
+    pipeline.llm = object()
+    understand = AsyncMock(side_effect=lambda text, ents, *args: ents)
+    rewrite = AsyncMock(return_value=None)
+    brand_lookup = AsyncMock(return_value=None)
+    uses_lookup = AsyncMock(return_value=None)
+    pipeline._llm_understand = understand
+    pipeline._llm_rewrite = rewrite
+    pipeline.web_brands = SimpleNamespace(lookup=brand_lookup)
+    pipeline.web_uses = SimpleNamespace(lookup=uses_lookup)
+    monkeypatch.setattr(checks, "usual_uses", lambda *args: None)
+    result = client.post("/v1/query", data={"lang": "en"},
+                         files={"audio": ("voice.wav", tiny_wav(), "audio/wav")}).json()
+    assert result["status"] in {"ok", "unverified", "needs_image", "needs_confirmation"}
+    if result["candidates"]:
+        confirmed = client.post("/v1/confirm", json={"session_id": result["session_id"],
+                                "candidate_id": result["candidates"][0]["candidate_id"], "lang": "en"})
+        assert confirmed.status_code == 200
+    for helper in (understand, rewrite, brand_lookup, uses_lookup):
+        helper.assert_not_awaited()
+
+
+def test_typed_questions_keep_optional_text_helpers(make_client):
+    from dataclasses import replace
+    from unittest.mock import AsyncMock
+    client = make_client()
+    pipeline = client.app.state.pipeline
+    pipeline.s = replace(pipeline.s, groq_api_keys=("test-only-not-a-real-key",), llm_mode="both")
+    pipeline.llm = object()
+    understand = AsyncMock(side_effect=lambda text, ents, *args: ents)
+    rewrite = AsyncMock(return_value=None)
+    pipeline._llm_understand = understand
+    pipeline._llm_rewrite = rewrite
+    result = client.post('/v1/query', data={'text':'Dolo 650 price','lang':'en'}).json()
+    assert result['status'] == 'ok'
+    understand.assert_awaited_once()
+    rewrite.assert_awaited_once()

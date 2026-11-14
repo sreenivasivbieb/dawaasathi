@@ -13,8 +13,8 @@ language are cleared. Medicine names, user messages, filenames, identifiers, and
 names remain as supplied. The selected language also applies when confirming a pending match.
 
 `web/icons/icon.svg` now contains a mint capsule-and-spark logo used in the header and favicon.
-The logo was rendered locally and inspected; the full website could not be visually reviewed
-because browser control is unavailable.
+The logo and five actual Chromium screenshots were visually inspected; see
+[screenshot provenance](screenshots/README.md).
 
 Verification: `artifacts/ui-language-checks.json` covers all ten languages, static/dynamic
 labels, accessibility text, saved answers, and a language change during confirmation. The updated

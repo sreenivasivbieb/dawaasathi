@@ -86,6 +86,7 @@ class Turn:
     followup: str | None = None
     ocr_meta: dict[str, Any] = field(default_factory=dict)
     llm_meta: dict[str, Any] = field(default_factory=dict)
+    voice_request: bool = False
 
 
 # If the template names one of these, the reworded reply must keep it (a dropped "at Jan Aushadhi"
@@ -258,7 +259,8 @@ class Pipeline:
         llm_meta: dict[str, Any] = {}
         if asr_meta:
             llm_meta["asr"] = asr_meta
-        if transcript and not session.pending and self.llm is not None and self.s.llm_nlu:
+        voice_request = bool(inp.audio) or inp.channel in ("stream", "phone")
+        if transcript and not voice_request and not session.pending and self.llm is not None and self.s.llm_nlu:
             ents = await self._llm_understand(transcript, ents, inp.lang, timings, llm_meta)
         if transcript:
             session.last_transcript = transcript
@@ -291,7 +293,8 @@ class Pipeline:
                         strip_item=ctx.get("strip_item"), rx_items=ctx.get("rx_items", []),
                         voice_item=ctx.get("voice_item"), chosen_rx=ctx.get("chosen_rx"),
                         pouch=inp.pouch, timings=timings, channel=inp.channel,
-                        tts_sample_rate=inp.tts_sample_rate, followup="symptom" if ents.symptom else "reference")
+                        tts_sample_rate=inp.tts_sample_rate, followup="symptom" if ents.symptom else "reference",
+                        voice_request=voice_request)
             return await self._answer(session, turn, t_start)
 
         # ---- OCR -> items (closed-set against the brand DB)
@@ -305,7 +308,7 @@ class Pipeline:
         turn = Turn(lang=inp.lang, transcript=transcript, ents=_ents_summary(ents), strip_item=strip_item,
                     rx_items=rx_items, voice_item=None, chosen_rx=None, pouch=inp.pouch, timings=timings,
                     channel=inp.channel, tts_sample_rate=inp.tts_sample_rate, ocr_meta=ocr_meta,
-                    llm_meta=llm_meta)
+                    llm_meta=llm_meta, voice_request=voice_request)
 
         # ---- voice -> brand (the web lookup first, if the drug DB has no good match for the name)
         if ents and ents.name_tokens and not inp.strip and not inp.rx:
@@ -511,7 +514,7 @@ class Pipeline:
     async def _web_brand_fallback(self, ents: Entities, turn: Turn) -> None:
         """Name not (well) matched by the drug DB -> find the brand's composition on the web and add it."""
         # A bare word with no question and no strength ("hello", "acha") is chatter, not a drug name.
-        if self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
+        if turn.voice_request or self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
             return
         res = self._search_ents(ents)
         if res.top is not None and res.top.score >= self.s.web_brand_min_score:
@@ -538,7 +541,7 @@ class Pipeline:
             return []
         uses = checks.usual_uses(self.store, target)
         web = None
-        if uses is None and self.web_uses is not None and self.s.web_lookup:
+        if uses is None and not turn.voice_request and self.web_uses is not None and self.s.web_lookup:
             found = await self.web_uses.lookup(target)
             turn.llm_meta["web_uses"] = ({"found": False} if found is None else
                                          {"found": True, "uses": found.uses, "source": found.source,
@@ -1013,7 +1016,7 @@ class Pipeline:
         symptom_answer = any(f.code.startswith(ANSWER_FLAG_PREFIXES) for f in flags)
         from app.config import REWRITE_LANGS
 
-        if self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
+        if not turn.voice_request and self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
             facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
                                                                                         "release", "mrp", "pack_qty"}),
                      "price": price.model_dump(exclude_none=True),

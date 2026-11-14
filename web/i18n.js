@@ -17,7 +17,7 @@ import { TERMS } from "./i18n/terms.js";
 export const LANGS = ["hi", "en", "mr", "bn", "gu", "pa", "ta", "te", "kn", "ml"];
 /** Each language's own name, for the language picker. */
 export const LANG_NAMES = {
-  hi: "हिंदी", en: "English", mr: "मराठी", bn: "বাংলা", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ", 
+  hi: "हिंदी", en: "English", mr: "मराठी", bn: "বাংলা", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ",
   ta: "தமிழ்", te: "తెలుగు", kn: "ಕನ್ನಡ", ml: "മലയാളം",
 };
 export const SPEECH_LANG = Object.fromEntries(LANGS.map((l) => [l, `${l}-IN`]));

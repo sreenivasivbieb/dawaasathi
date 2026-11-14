@@ -43,6 +43,10 @@ errors such as an invalid key are reported when a request is made.
 - `artifacts/ui-language-checks.json`: all ten interface languages and changing language during
   confirmation. Python regressions cover detected-language routing, storage, and audio jobs.
 
-Physical microphone capture, audible playback, and browser visual rendering have not been
-verified: browser control is unavailable in this environment. Live-provider checks establish the
+Physical microphone capture and audible playback remain unverified. Representative UI rendering
+was later verified using authorized local Chromium capture; see [screenshots](screenshots/README.md). Live-provider checks establish the
 recorded-file API path for Hindi and English, not recognition accuracy for every accent/language.
+
+Voice requests bypass optional text-model interpretation, reply rewriting and web-extraction helpers;
+Prisma transcripts pass to local matching/rules and localized templates before Timbre synthesis.
+Typed-query and explicit photo-reading helpers remain separately configurable.
