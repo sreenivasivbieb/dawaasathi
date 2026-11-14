@@ -1,0 +1,86 @@
+{
+  "checks": [
+    {
+      "language": "hi",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "en",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "mr",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "bn",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "gu",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "pa",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "or",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "ta",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "te",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "kn",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    },
+    {
+      "language": "ml",
+      "controls": true,
+      "wav_request": true,
+      "reply_language": true,
+      "playback_language": true
+    }
+  ],
+  "microphone": "simulated",
+  "transcript": "controlled text sent with audio",
+  "gnani_live_verified": false,
+  "audible_playback_verified": false,
+  "cancel_without_submission": true
+}

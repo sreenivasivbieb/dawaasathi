@@ -26,7 +26,9 @@ import json
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.guardrails import public_response
+from app.guardrails import clean_input, public_response
+from app.config import LANGS
+from app.api.routes import APIError, rate_limit
 from app.adapters.gnani_stt import language_code
 from app.metrics import METRICS, log_event
 from app.pipeline import QueryInput
@@ -46,20 +48,32 @@ async def stream(ws: WebSocket):
     except (asyncio.TimeoutError, WebSocketDisconnect, ValueError):
         await ws.close(code=1008)
         return
-    if first.get("type") != "start":
+    if not isinstance(first, dict) or first.get("type") != "start":
         await ws.send_json({"type": "error", "code": "EXPECTED_START", "message": "send start first"})
         await ws.close(code=1008)
         return
-    lang = first.get("lang") or "hi"
-    sample_rate = int(first.get("sample_rate") or 16000)
+    lang = first.get("lang")
+    lang = lang if isinstance(lang, str) and lang in LANGS else "hi"
+    try:
+        sample_rate = int(first.get("sample_rate") or 16000)
+    except (ValueError, TypeError, OverflowError):
+        await ws.send_json({"type": "error", "code": "BAD_SAMPLE_RATE", "message": "sample_rate must be a number"})
+        await ws.close(code=1008)
+        return
     if sample_rate not in (8000, 16000, 44100, 48000):
         sample_rate = 16000
     channel = "phone" if first.get("channel") == "phone" else "stream"
-    pouch = [str(p)[:80] for p in (first.get("pouch") or [])][:50]
-    session = app.state.sessions.get_or_create(first.get("session_id"), lang)
+    def parse_pouch(value):
+        return [str(p)[:80] for p in value[:50]] if isinstance(value, list) else []
+
+    pouch = parse_pouch(first.get("pouch"))
+    sid = first.get("session_id")
+    session = app.state.sessions.get_or_create(sid if isinstance(sid, str) else None, lang)
     images: dict[str, bytes] = {}
     state = {"audio_task": None, "playing": False, "closed": False}
     send_lock = asyncio.Lock()
+    turn_lock = asyncio.Lock()
+    turns: set[asyncio.Task] = set()
 
     async def send_json(obj) -> None:
         async with send_lock:
@@ -97,15 +111,33 @@ async def stream(ws: WebSocket):
         strip, rx = images.pop("strip", None), images.pop("rx", None)
         if not text and not strip and not rx:
             return
-        inp = QueryInput(session_id=session.id, lang=lang, text=text, strip=strip, rx=rx, pouch=pouch,
-                         channel="phone" if channel == "phone" else "stream",
-                         tts_sample_rate=8000 if channel == "phone" else None)
-        resp = await pipeline.query(inp)
-        s = app.state.settings
-        await send_json({"type": "result", **public_response(resp.model_dump(mode="json"), s, s.expose_debug)})
-        job = app.state.audio.get(resp.audio_id) if resp.audio_id else None
-        if job:
-            state["audio_task"] = asyncio.create_task(send_audio(job))
+        async with turn_lock:
+            try:
+                rate_limit(ws)
+                inp = QueryInput(session_id=session.id, lang=lang, text=clean_input(text), strip=strip, rx=rx, pouch=pouch,
+                                 channel="phone" if channel == "phone" else "stream",
+                                 tts_sample_rate=8000 if channel == "phone" else None)
+                resp = await pipeline.query(inp)
+                session.id = resp.session_id
+                s = app.state.settings
+                await send_json({"type": "result", **public_response(resp.model_dump(mode="json"), s, s.expose_debug)})
+                job = app.state.audio.get(resp.audio_id) if resp.audio_id else None
+                if job:
+                    stop_audio()
+                    state["audio_task"] = asyncio.create_task(send_audio(job))
+            except APIError as exc:
+                await send_json({"type": "error", "code": exc.code, "message": exc.message})
+            except Exception as exc:
+                log_event("stream_error", session=session.id, error=type(exc).__name__)
+                await send_json({"type": "error", "code": "INTERNAL", "message": "Could not complete the check. Please retry."})
+
+    async def queue_turn(text):
+        if len(turns) >= 2:
+            await send_json({"type": "error", "code": "BUSY", "message": "Please wait for the current check."})
+            return
+        task = asyncio.create_task(handle_turn(text))
+        turns.add(task)
+        task.add_done_callback(turns.discard)
 
     await send_json({"type": "ready", "session_id": session.id,
                      "stt": "prisma" if settings.stt_live else "mock"})
@@ -136,16 +168,19 @@ async def stream(ws: WebSocket):
                     msg = json.loads(raw)
                 except (TypeError, ValueError):
                     continue
+                if not isinstance(msg, dict):
+                    continue
                 kind = msg.get("type")
                 if kind == "speech_start":
                     if state["playing"] and stop_audio():
                         await send_json({"type": "barge_in"})
                     await send_json({"type": "speech_start"})
                 elif kind == "transcript":
-                    text = (msg.get("text") or "").strip()
+                    raw_text = msg.get("text")
+                    text = clean_input(raw_text) if isinstance(raw_text, str) else None
                     if text:
                         await send_json({"type": "transcript", "text": text})
-                        asyncio.create_task(handle_turn(text))
+                        await queue_turn(text)
                 elif kind == "error":
                     await send_json({"type": "error", "code": "STT", "message": msg.get("message", "")})
         except websockets.ConnectionClosed:
@@ -176,6 +211,10 @@ async def stream(ws: WebSocket):
             try:
                 data = json.loads(msg.get("text") or "{}")
             except ValueError:
+                await send_json({"type": "error", "code": "BAD_MESSAGE", "message": "Send a JSON object."})
+                continue
+            if not isinstance(data, dict):
+                await send_json({"type": "error", "code": "BAD_MESSAGE", "message": "Send a JSON object."})
                 continue
             kind = data.get("type")
             if kind == "interrupt":
@@ -187,26 +226,44 @@ async def stream(ws: WebSocket):
                 with contextlib.suppress(websockets.ConnectionClosed):
                     await upstream.send(json.dumps({"type": "commit"}))
             elif kind == "image" and data.get("kind") in ("strip", "rx"):
+                encoded = data.get("data")
+                if not isinstance(encoded, str) or len(encoded) > ((settings.max_image_bytes + 2) // 3) * 4:
+                    await send_json({"type": "error", "code": "TOO_LARGE", "message": "Invalid or oversized image."})
+                    continue
                 try:
-                    raw = base64.b64decode(data.get("data", ""), validate=False)
+                    raw = base64.b64decode(encoded, validate=True)
                 except ValueError:
+                    await send_json({"type": "error", "code": "BAD_IMAGE", "message": "Image must be valid base64."})
                     continue
                 if 0 < len(raw) <= settings.max_image_bytes:
                     images[data["kind"]] = raw
                     await send_json({"type": "image_ok", "kind": data["kind"]})
             elif kind == "text":
-                text = (data.get("text") or "").strip()[:500]
+                value = data.get("text")
+                if value is not None and not isinstance(value, str):
+                    await send_json({"type": "error", "code": "BAD_MESSAGE", "message": "text must be a string."})
+                    continue
+                text = clean_input(value)
                 if text or images:
-                    asyncio.create_task(handle_turn(text or None))
+                    await queue_turn(text)
             elif kind == "pouch":
-                pouch = [str(p)[:80] for p in (data.get("pouch") or [])][:50]
+                pouch = parse_pouch(data.get("pouch"))
             elif kind == "stop":
                 break
     except WebSocketDisconnect:
         pass
     finally:
+        pending = list(turns)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
         stop_audio()
+        if session.current_audio_id:
+            app.state.audio.cancel(session.current_audio_id)
         upstream_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await upstream_task
         if upstream is not None:
             with contextlib.suppress(Exception):
                 await upstream.close()

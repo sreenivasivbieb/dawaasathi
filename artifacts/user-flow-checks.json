@@ -1,0 +1,230 @@
+{
+  "base_url": "http://127.0.0.1:8001",
+  "adapter_overrides": false,
+  "providers": {
+    "stt": "mock",
+    "tts": "mock",
+    "ocr": "rapidocr"
+  },
+  "note": "Real HTTP/WebSocket requests and actual sample images. Provider configuration is reported by /v1/config; no claim of live STT/TTS or real-world medicine validation.",
+  "checks": [
+    {
+      "name": "health",
+      "passed": true
+    },
+    {
+      "name": "config matches supported upload limits and languages",
+      "passed": true
+    },
+    {
+      "name": "search endpoint finds Dolo",
+      "passed": true
+    },
+    {
+      "name": "typed lookup",
+      "passed": true,
+      "detail": {
+        "seconds": 0.01
+      }
+    },
+    {
+      "name": "follow-up retains session and medicine",
+      "passed": true
+    },
+    {
+      "name": "duplicate ingredient check",
+      "passed": true
+    },
+    {
+      "name": "ambiguous name requests confirmation",
+      "passed": true
+    },
+    {
+      "name": "candidate selection resolves medicine",
+      "passed": true
+    },
+    {
+      "name": "none-of-these requests new evidence",
+      "passed": true
+    },
+    {
+      "name": "unknown medicine stays unverified",
+      "passed": true
+    },
+    {
+      "name": "real strip OCR",
+      "passed": true,
+      "detail": {
+        "seconds": 1.04,
+        "status": "ok",
+        "verdict": "GENERIC_EQUIVALENT"
+      }
+    },
+    {
+      "name": "real matching prescription and strip",
+      "passed": true,
+      "detail": {
+        "seconds": 3.07,
+        "status": "ok",
+        "verdict": "MATCH"
+      }
+    },
+    {
+      "name": "real IR versus SR comparison",
+      "passed": true,
+      "detail": {
+        "seconds": 4.65,
+        "status": "ok",
+        "verdict": "RELEASE_MISMATCH"
+      }
+    },
+    {
+      "name": "real liquid concentration comparison",
+      "passed": true,
+      "detail": {
+        "seconds": 3.07,
+        "status": "ok",
+        "verdict": "CONCENTRATION_MISMATCH"
+      }
+    },
+    {
+      "name": "synthetic banned-combination example",
+      "passed": true,
+      "detail": {
+        "seconds": 1.58,
+        "status": "ok",
+        "verdict": "BANNED_COMBINATION"
+      }
+    },
+    {
+      "name": "synthetic batch alert",
+      "passed": true
+    },
+    {
+      "name": "history contains actual follow-up",
+      "passed": true
+    },
+    {
+      "name": "history summaries",
+      "passed": true
+    },
+    {
+      "name": "resume same conversation",
+      "passed": true
+    },
+    {
+      "name": "chemist script",
+      "passed": true
+    },
+    {
+      "name": "audio file endpoint",
+      "passed": true
+    },
+    {
+      "name": "audio interrupt",
+      "passed": true
+    },
+    {
+      "name": "draft is based on actual result and never submitted",
+      "passed": true
+    },
+    {
+      "name": "empty query",
+      "passed": true
+    },
+    {
+      "name": "wrong photo type",
+      "passed": true
+    },
+    {
+      "name": "oversized photo",
+      "passed": true
+    },
+    {
+      "name": "missing confirmation choice",
+      "passed": true
+    },
+    {
+      "name": "expired audio",
+      "passed": true
+    },
+    {
+      "name": "unknown history",
+      "passed": true
+    },
+    {
+      "name": "unreadable photo asks for another photo",
+      "passed": true
+    },
+    {
+      "name": "silent/unconfigured voice does not invent a medicine",
+      "passed": true
+    },
+    {
+      "name": "reply language hi",
+      "passed": true
+    },
+    {
+      "name": "reply language en",
+      "passed": true
+    },
+    {
+      "name": "reply language mr",
+      "passed": true
+    },
+    {
+      "name": "reply language bn",
+      "passed": true
+    },
+    {
+      "name": "reply language gu",
+      "passed": true
+    },
+    {
+      "name": "reply language pa",
+      "passed": true
+    },
+    {
+      "name": "reply language or",
+      "passed": true
+    },
+    {
+      "name": "reply language ta",
+      "passed": true
+    },
+    {
+      "name": "reply language te",
+      "passed": true
+    },
+    {
+      "name": "reply language kn",
+      "passed": true
+    },
+    {
+      "name": "reply language ml",
+      "passed": true
+    },
+    {
+      "name": "WebSocket invalid start: EXPECTED_START",
+      "passed": true
+    },
+    {
+      "name": "WebSocket invalid start: BAD_SAMPLE_RATE",
+      "passed": true
+    },
+    {
+      "name": "WebSocket malformed message returns error",
+      "passed": true
+    },
+    {
+      "name": "WebSocket recovers and answers next question",
+      "passed": true
+    },
+    {
+      "name": "delete owned test conversation",
+      "passed": true
+    }
+  ],
+  "passed": 47,
+  "total": 47
+}

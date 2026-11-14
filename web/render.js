@@ -238,13 +238,8 @@ function priceSec(r, lang) {
   </section>`;
 }
 
-function unitPrice(a) {
-  if (a.unit_price != null) return a.unit_price;
-  return a.pack_qty ? a.price / a.pack_qty : a.price;
-}
-
 function altsSec(r, lang) {
-  const alts = (r.alternatives || []).slice().sort((a, b) => unitPrice(a) - unitPrice(b)).slice(0, 3);
+  const alts = (r.alternatives || []).slice(0, 3);
   if (!alts.length) return "";
   const item = targetItem(r) || {};
   const unit = packUnit(lang, item.pack_unit, item.form);
@@ -295,23 +290,23 @@ function flagsSec(r, lang) {
   </ul></section>`;
 }
 
-function audioRow(r, lang) {
+function audioRow(r, lang, compact = false) {
   const hasAudio = r.audio_stream_url || r.script?.text;
   if (!hasAudio) return "";
   return html`<div class="audio-row">
     <button class="btn btn--primary" type="button" data-act="replay">${icon("play")}${L(lang, "replay")}</button>
     <button class="btn" type="button" data-act="stop-audio" aria-label="${t(lang, "stop")}">${icon("stop")}<span class="lbl">${t(lang, "stop")}</span></button>
-    ${r.audio_url && r.tts === "timbre" ? html`<a class="btn btn--ghost" href="${r.audio_url}" download="dawa-saathi-reply.ogg">${icon("down")}<span class="lbl">${t(lang, "download")}</span></a>` : ""}
+    ${!compact && r.audio_url && r.tts === "timbre" ? html`<a class="btn btn--ghost" href="${r.audio_url}" download="dawa-saathi-reply.ogg">${icon("down")}<span class="lbl">${t(lang, "download")}</span></a>` : ""}
   </div>
-  ${r.tts !== "timbre" ? html`<p class="small muted">${t(lang, "mock_audio")}${r.audio_url ? html` · <a href="${r.audio_url}" download="dawa-saathi-reply.ogg">.ogg</a>` : ""}</p>` : ""}`;
+  ${!compact && r.tts !== "timbre" ? html`<p class="small muted">${t(lang, "mock_audio")}${r.audio_url ? html` · <a href="${r.audio_url}" download="dawa-saathi-reply.ogg">.ogg</a>` : ""}</p>` : ""}`;
 }
 
-function replySec(r, lang) {
+function replySec(r, lang, compact = false) {
   const text = r.script?.text;
   if (!text && !r.audio_stream_url) return "";
   return html`<section class="sec reply"><h3>${L(lang, "reply")}</h3>
     ${text ? html`<p class="reply__text" lang="${r.lang || lang}">${text}</p>` : ""}
-    ${audioRow(r, lang)}</section>`;
+    ${audioRow(r, lang, compact)}</section>`;
 }
 
 function chemistSec(r, lang, o) {
@@ -359,6 +354,20 @@ export function renderResult(r, o = {}) {
     // Phone mode: audio-first, keep only the coloured shape + title + replay.
     return html`<article class="card card--${color} card--phone" aria-labelledby="verdict-title">
       ${head(r, lang)}${replyAudioOnly(r, lang)}${foot(lang)}</article>`;
+  }
+  if (o.compact) {
+    const hasDetails = Object.keys(r.items || {}).length || r.price;
+    return html`<article class="card card--${color}" aria-labelledby="verdict-title">
+      ${head(r, lang)}
+      ${confirmSec(r, lang, o)}${needsImageSec(r, lang)}${errorSec(r, lang)}
+      ${replySec(r, lang, true)}${flagsSec(r, lang)}${safetySec(r, lang)}
+      ${r.mode === "compare" ? itemsSec(r, lang) : ""}
+      ${altsSec(r, lang)}
+      ${hasDetails ? html`<details class="result-details"><summary>${t(lang, "medicine")} · ${t(lang, "salts")} · ${t(lang, "price")}</summary>
+        ${r.mode === "compare" ? "" : itemsSec(r, lang)}${priceSec(r, lang)}</details>` : ""}
+      ${chemistSec(r, lang, o)}
+      ${Object.keys(r.data_sources || {}).length ? html`<details class="result-details"><summary>${t(lang, "data")}</summary>${renderDataSources(r.data_sources, lang)}</details>` : ""}
+    </article>`;
   }
   return html`<article class="card card--${color}" aria-labelledby="verdict-title">
     ${head(r, lang)}

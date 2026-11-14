@@ -265,15 +265,21 @@ class Pipeline:
                 return await self._resume(session, pick, timings, t_start, transcript)
             session.pending = None  # a fresh question; fall through
 
-        # ---- symptom-only follow-up about the last medicine ("बुखार के लिए")
-        if (ents and ents.symptom and not ents.name_tokens and not inp.strip and not inp.rx
+        # ---- follow-up about the last medicine ("बुखार के लिए", "what is it used for?")
+        reference_intents = {"USE_QUERY", "PRICE_CHECK", "FIND_GENERIC", "DOSAGE_QUERY", "VERIFY_MATCH"}
+        if (ents and (ents.symptom or ents.intent in reference_intents)
+                and not ents.name_tokens and not ents.strengths and not ents.form and not ents.release
+                and not inp.strip and not inp.rx
                 and session.last_item is not None and session.last_context):
             ctx = dict(session.last_context)
-            turn = Turn(lang=inp.lang, transcript=transcript, ents={**ctx["ents"], "symptom": ents.symptom},
+            follow_ents = {**ctx["ents"], "symptom": ents.symptom}
+            if ents.intent in reference_intents:
+                follow_ents["intent"] = ents.intent
+            turn = Turn(lang=inp.lang, transcript=transcript, ents=follow_ents,
                         strip_item=ctx.get("strip_item"), rx_items=ctx.get("rx_items", []),
                         voice_item=ctx.get("voice_item"), chosen_rx=ctx.get("chosen_rx"),
                         pouch=inp.pouch, timings=timings, channel=inp.channel,
-                        tts_sample_rate=inp.tts_sample_rate, followup="symptom")
+                        tts_sample_rate=inp.tts_sample_rate, followup="symptom" if ents.symptom else "reference")
             return await self._answer(session, turn, t_start)
 
         # ---- OCR -> items (closed-set against the brand DB)
@@ -770,7 +776,11 @@ class Pipeline:
                     brand_lines.append(ln)
         found: list[tuple[str, MatchResult]] = []
         for line in brand_lines:
-            tokens = re.findall(r"[^\s]+", line)
+            # OCR often joins the trade name and strength (AUGMENTIN625,
+            # GLYCOMET-SR500). Keep the printed line but tokenize those boundaries.
+            spaced = re.sub(r"(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])", " ", line)
+            spaced = re.sub(r"-(?=(?:SR|ER|XR|CR|DR)\b)", " ", spaced, flags=re.I)
+            tokens = re.findall(r"[^\s]+", spaced)
             nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", line)]
             res = self.index.search(tokens, strengths=nums or None, form=form, release=release,
                                     t1=self.s.match_t1, t2=self.s.match_t2)

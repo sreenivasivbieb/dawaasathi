@@ -13,6 +13,7 @@ import hashlib
 import shutil
 import subprocess
 import time
+import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,9 +49,14 @@ class SegmentCache:
     def put(self, key: str, pcm: bytes) -> None:
         p = self._path(key)
         p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(".tmp")
-        tmp.write_bytes(pcm)
-        tmp.replace(p)
+        # Concurrent replies may synthesize the same clause at once.
+        with tempfile.NamedTemporaryFile(dir=p.parent, suffix=".tmp", delete=False) as f:
+            tmp = Path(f.name)
+            f.write(pcm)
+        try:
+            tmp.replace(p)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def has(self, key: str) -> bool:
         return self._path(key).exists()
@@ -179,6 +185,7 @@ class AudioService:
         return job
 
     def get(self, job_id: str) -> AudioJob | None:
+        self._gc()
         return self.jobs.get(job_id)
 
     def cancel(self, job_id: str) -> None:
@@ -212,6 +219,7 @@ class AudioService:
     def _gc(self) -> None:
         now = time.time()
         for jid in [j for j, job in self.jobs.items() if now - job.created > self.ttl_s]:
+            self.cancel(jid)
             self.jobs.pop(jid, None)
 
 

@@ -40,14 +40,17 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 
 
 # ---------------------------------------------------------------- rate limiting
-_HITS: dict[str, deque[float]] = defaultdict(deque)
-
-
 def rate_limit(request: Request) -> None:
     limit = request.app.state.settings.rate_limit_per_min
     key = request.client.host if request.client else "anon"
-    now = time.time()
-    q = _HITS[key]
+    now = time.monotonic()
+    # Scope the buckets to this application, and discard inactive clients.
+    hits = getattr(request.app.state, "rate_hits", None)
+    if hits is None:
+        hits = request.app.state.rate_hits = defaultdict(deque)
+    for host in [host for host, entries in hits.items() if not entries or now - entries[-1] > 60]:
+        del hits[host]
+    q = hits[key]
     while q and now - q[0] > 60:
         q.popleft()
     if len(q) >= limit:
@@ -358,7 +361,11 @@ async def thread_messages(request: Request, thread_id: str, limit: int = Query(2
     local = request.app.state.local
     if not local.thread_exists(tid):
         raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
-    return {"id": tid, "lang": local.thread_lang(tid), "messages": local.messages(tid, limit)}
+    messages = local.messages(tid, limit)
+    for message in messages:
+        if message.get("response"):
+            message["response"] = public_response(message["response"], request.app.state.settings, False)
+    return {"id": tid, "lang": local.thread_lang(tid), "messages": messages}
 
 
 @router.delete("/v1/threads/{thread_id}")
@@ -395,4 +402,6 @@ async def config(request: Request):
     return {"languages": langs, "stt": "prisma" if st.settings.stt_live else "mock",
             "tts": "timbre" if st.audio.live else "mock", "ocr": st.ocr.provider,
             "sample_rate": st.settings.tts_sample_rate,
+            "max_image_bytes": st.settings.max_image_bytes,
+            "max_audio_bytes": st.settings.max_audio_bytes,
             "data_sources": st.pipeline._data_sources()}
