@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 Intent = Literal["FIND_GENERIC", "PRICE_CHECK", "DOSAGE_QUERY", "VERIFY_MATCH", "USE_QUERY", "CLARIFY"]
-Status = Literal["ok", "needs_confirmation", "needs_image", "unverified", "error"]
+Status = Literal["ok", "needs_confirmation", "needs_image", "unverified", "error", "blocked"]
 VerdictCode = Literal[
     "BANNED_COMBINATION",
     "MATCH",

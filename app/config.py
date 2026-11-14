@@ -63,6 +63,7 @@ class Settings:
     tts_speed: float
     ocr_providers: tuple[str, ...]
     detector_model: Path
+    expose_debug: bool
     groq_api_keys: tuple[str, ...]
     groq_vision_model: str
     groq_llm_model: str
@@ -138,6 +139,7 @@ def get_settings() -> Settings:
         web_lookup_on=(_get("WEB_LOOKUP", "1") or "1") == "1",
         anthropic_model=_get("ANTHROPIC_OCR_MODEL", "claude-opus-5-5"),
         db_path=Path(_get("DAWA_DB_PATH", str(ROOT / "var" / "dawasaathi.db"))),
+        expose_debug=_get("EXPOSE_DEBUG", "0") == "1",
         detector_model=Path(_get("DETECTOR_MODEL", str(ROOT / "var" / "models" / "pack_detector.onnx"))),
         cache_dir=Path(_get("DAWA_CACHE_DIR", str(ROOT / "var" / "tts_cache"))),
         session_ttl_s=_int("SESSION_TTL_S", 900),

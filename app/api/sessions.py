@@ -6,10 +6,14 @@ No audio or images are kept.
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+
+_PUBLIC_ID = re.compile(r"^s_[0-9a-f]{12,24}$")
 
 
 @dataclass
@@ -33,19 +37,26 @@ class SessionStore:
         self.ttl_s = ttl_s
         self._sessions: dict[str, Session] = {}
 
-    def get_or_create(self, session_id: str | None, lang: str = "hi") -> Session:
+    def get_or_create(self, session_id: str | None, lang: str = "hi", trusted: bool = False) -> Session:
+        """A client may only resume a session id this server issued (random, unguessable). An
+        unknown id gets a fresh session, never one named by the client, and server-side ids
+        (WhatsApp, `trusted=True`) cannot be opened from the public API."""
         self.gc()
+        if session_id and not trusted and not _PUBLIC_ID.match(session_id):
+            session_id = None
         if session_id and session_id in self._sessions:
             s = self._sessions[session_id]
             s.last_seen = time.time()
             return s
-        sid = session_id if session_id and len(session_id) <= 64 and session_id.isascii() else None
-        s = Session(id=sid or f"s_{secrets.token_hex(6)}", lang=lang)
+        sid = session_id if trusted and session_id and len(session_id) <= 64 and session_id.isascii() else None
+        s = Session(id=sid or f"s_{secrets.token_hex(12)}", lang=lang)
         self._sessions[s.id] = s
         return s
 
-    def get(self, session_id: str) -> Session | None:
+    def get(self, session_id: str, trusted: bool = False) -> Session | None:
         self.gc()
+        if not trusted and not _PUBLIC_ID.match(session_id or ""):
+            return None
         return self._sessions.get(session_id)
 
     def gc(self) -> None:

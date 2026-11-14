@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import secrets
+import hmac
 import os
 
 import httpx
@@ -25,6 +27,7 @@ from app.pipeline import QueryInput
 from app.tts.cache import encode
 
 router = APIRouter()
+_SESSION_KEY = secrets.token_bytes(32)  # per process; sessions are in memory anyway
 GRAPH = "https://graph.facebook.com/" + os.environ.get("WHATSAPP_GRAPH_VERSION", "v21.0")
 
 
@@ -68,8 +71,9 @@ async def _handle(app, msg: dict) -> None:
     kind = msg.get("type")
     headers = {"Authorization": f"Bearer {s.whatsapp_token}"}
     try:
-        inp = QueryInput(session_id=f"wa_{hashlib.sha1((sender or '').encode()).hexdigest()[:12]}",
-                         lang="hi", channel="whatsapp")
+        # Keyed hash: knowing someone's phone number must not give their session id.
+        sid = hmac.new(_SESSION_KEY, (sender or "").encode(), hashlib.sha256).hexdigest()[:24]
+        inp = QueryInput(session_id=f"wa_{sid}", lang="hi", channel="whatsapp", trusted_session=True)
         if kind in ("audio", "image"):
             media_id = msg[kind]["id"]
             meta = (await client.get(f"{GRAPH}/{media_id}", headers=headers)).json()

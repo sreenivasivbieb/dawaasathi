@@ -47,6 +47,7 @@ class Segment:
 class RenderContext:
     lang: str
     status: str
+    guard_kind: str | None = None  # status "blocked": injection | self_harm | emergency | misuse
     intent: str | None = None
     verdict: Verdict | None = None
     item: DrugItem | None = None
@@ -184,6 +185,10 @@ def render(ctx: RenderContext) -> Rendered:
         key = "error_stt" if ctx.error_kind == "stt" else "error_generic"
         segs = [Segment(lines[key], "fixed")]
         return Rendered(segs + [doctor], _join(segs + [doctor]), "", segs + [doctor])
+
+    if ctx.status == "blocked":  # guardrail reply: fixed text, no medicine facts, no doctor line
+        segs = [Segment(lines[f"guard_{ctx.guard_kind}"], "fixed")]
+        return Rendered(segs, _join(segs), "", segs)
 
     if ctx.status == "needs_image":
         key = "needs_image_verify" if ctx.needs_image_kind == "verify" else "needs_image"

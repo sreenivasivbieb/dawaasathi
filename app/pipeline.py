@@ -28,6 +28,7 @@ from app.dialogue.verbalize import speakable
 from app.engine import alternatives as altmod
 from app.engine import checks, price as pricemod, rules, safety as safetymod
 from app.engine.strip_text import SaltVocab, extract_salts
+from app.guardrails import check_query, clean_input, safe_label, unsafe_reply_text
 from app.engine.web_uses import WebUseLookup
 from app.engine.salts import (canonical_form, canonical_release, canonical_salt, parse_composition,
                               salt_key, strength_key)
@@ -57,6 +58,7 @@ class QueryInput:
     pouch: list[str] = field(default_factory=list)
     channel: str = "web"  # web | phone | whatsapp | stream
     tts_sample_rate: int | None = None
+    trusted_session: bool = False  # server-side session ids (WhatsApp); never from the public API
 
 
 @dataclass
@@ -125,10 +127,13 @@ class Pipeline:
     # ================================================================== entry points
     async def query(self, inp: QueryInput) -> QueryResponse:
         t_start = time.perf_counter()
-        session = self.sessions.get_or_create(inp.session_id, inp.lang)
+        session = self.sessions.get_or_create(inp.session_id, inp.lang, trusted=inp.trusted_session)
         session.lang = inp.lang
         timings: dict[str, float | None] = {"asr": None, "ocr": None, "match": None, "engine": None,
                                             "script": None, "tts_first_chunk": None}
+        inp.text = clean_input(inp.text)
+        if inp.text and (g := check_query(inp.text)).blocked:  # typed: stop before OCR / LLM run
+            return self._finish_guard(session, inp, g.kind, timings, t_start, inp.text)
 
         ocr_meta: dict[str, dict] = {}
         asr_meta: dict[str, Any] = {}
@@ -187,7 +192,9 @@ class Pipeline:
                 return self._finish_simple(session, inp, "error", timings, t_start,
                                            error_kind="service" if service else "stt", error_code=code)
         else:
-            transcript = asr_r
+            transcript = clean_input(asr_r)
+            if transcript and (g := check_query(transcript)).blocked:  # spoken: before the LLM sees it
+                return self._finish_guard(session, inp, g.kind, timings, t_start, transcript)
         for r in (strip_r, rx_r):
             if isinstance(r, BaseException):
                 METRICS.count("ocr_error")
@@ -379,6 +386,9 @@ class Pipeline:
         for group in ANCHORS:
             if any(a in tlow for a in group) and not any(a in low for a in group):
                 problems.append(f"dropped: {group[0]}")
+        unsafe = [h for h in unsafe_reply_text(text) if h not in tlow]
+        if unsafe:
+            problems.append(f"unsafe: {unsafe}")
         if not text.strip().endswith(doctor.strip()):
             problems.append("missing doctor line")
         if len(text.split()) > 60:
@@ -626,6 +636,14 @@ class Pipeline:
     def resolve_ocr(self, o: OCRItem, source: str, provider: str = "vlm", meta: dict | None = None) -> DrugItem:
         meta = meta if meta is not None else {}
         local = provider.startswith(("rapidocr", "tesseract"))
+        # Text read off a photo is untrusted input: anything that may be spoken must look like a
+        # brand / salt / dose line (no links, phone numbers or instructions printed on the pack).
+        o = o.model_copy()
+        printed_brand = o.brand
+        o.brand = safe_label(o.brand)
+        if printed_brand and o.brand is None:
+            meta["brand_dropped"] = True
+        o.directions = safe_label(o.directions, max_len=120, max_words=20)
         ocr_lines = (o.raw_text or "").splitlines()
         # Offline OCR has no structure: salts come only from the closed-set extractor, never from
         # whatever words happen to sit next to a "mg".
@@ -635,7 +653,9 @@ class Pipeline:
                                   for s in o.salts if s.name]
         if local:
             salts = ocr_salts
-        elif salts and ocr_salts:
+        else:  # a VLM salt we do not know is spoken as read: it must at least look like a salt name
+            salts = [s for s in salts if s.name in self.vocab or safe_label(s.name, max_len=40, max_words=4)]
+        if not local and salts and ocr_salts:
             # VLM vs printed text: if the OCR lines name salts and none of them is what the VLM said,
             # the VLM may have read (or invented) the wrong thing; do not trust its list as complete.
             vlm_names, seen = {s.name for s in salts}, {s.name for s in ocr_salts}
@@ -925,6 +945,23 @@ class Pipeline:
             resp.data_sources["error"] = {"code": error_code}
         return resp
 
+    def _finish_guard(self, session: Session, inp: QueryInput, kind: str, timings: dict, t_start: float,
+                      transcript: str | None) -> QueryResponse:
+        """Guardrail reply. Only the kind is logged, never the text."""
+        METRICS.count(f"guard_{kind}")
+        log_event("guard", session=session.id, kind=kind)
+        session.pending = None
+        turn = Turn(lang=inp.lang, transcript=transcript, ents={"intent": "CLARIFY"}, strip_item=None,
+                    rx_items=[], voice_item=None, chosen_rx=None, pouch=inp.pouch, timings=timings,
+                    channel=inp.channel, tts_sample_rate=inp.tts_sample_rate)
+        ctx = RenderContext(lang=inp.lang, status="blocked", guard_kind=kind)
+        resp = self._respond(session, turn, ctx, status="blocked", t_start=t_start,
+                             guard_sources=[{"helplines": HELPLINES}])
+        resp.card = Card(color="red" if kind in ("self_harm", "emergency") else "amber", icon="question",
+                         title=f"GUARD_{kind.upper()}")
+        resp.data_sources["guard"] = {"kind": kind}
+        return resp
+
     def _respond(self, session: Session, turn: Turn, ctx: RenderContext, status: str, t_start: float,
                  verdict: Verdict | None = None, safety: SafetyResult | None = None, price=None,
                  alternatives=None, flags=None, candidates=None, focus=None, prescribed=None, dispensed=None,
@@ -962,7 +999,10 @@ class Pipeline:
         chemist = rendered.chemist_text
         if chemist and not guard.validate(chemist, *sources).ok:
             chemist = ""
-        speech_segments = [speakable(s.text, ctx.lang) for s in segments]
+        if status == "blocked":  # helpline numbers are spoken digit by digit: "एक चार चार एक छह"
+            speech_segments = [speakable(_digits_apart(s.text), ctx.lang) for s in segments]
+        else:
+            speech_segments = [speakable(s.text, ctx.lang) for s in segments]
         session.last_chemist_text = chemist or None
         session.lang = ctx.lang
         turn.timings["script"] = round((time.perf_counter() - t0) * 1000, 1)
@@ -1027,6 +1067,13 @@ def _date_parts(safety: SafetyResult | None) -> str | None:
     if safety is None:
         return None
     return safety.notification_date or safety.list_as_of
+
+
+HELPLINES = [14416, 112, 108]  # Tele-MANAS, national emergency, ambulance (spoken in guard replies)
+
+
+def _digits_apart(text: str) -> str:
+    return re.sub(r"\d{3,}", lambda m: " ".join(m.group(0)), text)
 
 
 def _card(status: str, code: str | None, flags: list[Flag]) -> Card:

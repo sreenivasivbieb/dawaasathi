@@ -85,6 +85,11 @@ def create_app(settings: Settings | None = None, **overrides) -> FastAPI:
     async def _api_error(_: Request, exc: APIError):
         return error_response(exc.status, exc.code, exc.message)
 
+    @app.exception_handler(Exception)
+    async def _unhandled(_: Request, exc: Exception):
+        logging.getLogger("dawasaathi").exception("unhandled error: %s", type(exc).__name__)
+        return error_response(500, "INTERNAL", "Something went wrong. Please try again.")
+
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):
         return error_response(422, "VALIDATION", str(exc.errors()[:3]))

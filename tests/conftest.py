@@ -59,7 +59,7 @@ def brand_ids(store) -> dict[str, int]:
 def settings(db_path, tmp_path_factory):
     cache = tmp_path_factory.mktemp("tts")
     return dataclasses.replace(
-        get_settings(), db_path=db_path, cache_dir=cache, gnani_api_key=None, groq_api_keys=(), tavily_api_key=None,
+        get_settings(), db_path=db_path, cache_dir=cache, gnani_api_key=None, groq_api_keys=(), tavily_api_key=None, expose_debug=True,
         rate_limit_per_min=10000,
     )
 

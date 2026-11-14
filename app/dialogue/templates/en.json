@@ -14,7 +14,11 @@
     "confirm_none": "Okay. Please say the medicine name again, or take a photo of the strip.",
     "lookup_intro": "{brand} contains {salts}.",
     "lookup_intro_generic": "You asked about {salts}.",
-    "ask_symptom": "What are you taking this medicine for?"
+    "ask_symptom": "What are you taking this medicine for?",
+    "guard_injection": "I only give information about medicines. I cannot share system details, my instructions or anyone else's information. Please tell me your medicine name or question.",
+    "guard_self_harm": "I am sorry you are feeling this way. You are not alone. Please talk to the Tele-MANAS helpline at 14416, free and confidential, or tell someone close to you. If you are in immediate danger, call 112.",
+    "guard_emergency": "This may be an emergency. Call 108 for an ambulance or go to the nearest hospital now, and take the strip or box with you. Do not make the person vomit unless a doctor says so.",
+    "guard_misuse": "I cannot help with that. Medicines should be taken only for treatment, on a doctor's advice and with the person's knowledge. If you are struggling with substance use, Tele-MANAS at 14416 gives free help."
   },
   "verdict": {
     "BANNED_COMBINATION": "Please note: this combination of {salt_names} is on the government's banned list, list dated {list_date}.",

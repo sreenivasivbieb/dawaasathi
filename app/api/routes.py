@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, Form, Header, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
+from app.guardrails import clean_input, public_response
 from app.audio_io import prepare_for_prisma
 from app.config import LANGS, TEMPLATE_LANGS
 from app.dialogue.templates import load as load_templates
@@ -101,7 +102,7 @@ async def query(
     strip_b = await _read_upload(strip, s.max_image_bytes, IMAGE_TYPES, "strip")
     rx_b = await _read_upload(rx, s.max_image_bytes, IMAGE_TYPES, "rx")
     if text is not None:
-        text = text.strip()[:500] or None
+        text = clean_input(text, 500)
     if not (audio_b or strip_b or rx_b or text):
         raise APIError(400, "EMPTY_REQUEST", "Send audio, text, a strip photo or a prescription photo.")
     audio_name = "audio.wav"
@@ -114,7 +115,7 @@ async def query(
                      strip=strip_b, rx=rx_b, pouch=_parse_pouch(pouch),
                      channel=channel if channel in ("web", "phone") else "web")
     resp = await request.app.state.pipeline.query(inp)
-    return JSONResponse(resp.model_dump(mode="json"))
+    return JSONResponse(public_response(resp.model_dump(mode="json"), s, s.expose_debug))
 
 
 class ConfirmBody(BaseModel):
@@ -131,7 +132,8 @@ async def confirm(request: Request, body: ConfirmBody):
         raise APIError(400, "BAD_CONFIRM", "Send candidate_id or none: true.")
     resp = await request.app.state.pipeline.confirm(body.session_id, body.candidate_id, body.none,
                                                     _lang(body.lang) if body.lang else None)
-    return JSONResponse(resp.model_dump(mode="json"))
+    s = request.app.state.settings
+    return JSONResponse(public_response(resp.model_dump(mode="json"), s, s.expose_debug))
 
 
 class SpeakBody(BaseModel):

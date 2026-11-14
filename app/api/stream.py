@@ -26,6 +26,7 @@ import json
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.guardrails import public_response
 from app.adapters.gnani_stt import language_code
 from app.metrics import METRICS, log_event
 from app.pipeline import QueryInput
@@ -100,7 +101,8 @@ async def stream(ws: WebSocket):
                          channel="phone" if channel == "phone" else "stream",
                          tts_sample_rate=8000 if channel == "phone" else None)
         resp = await pipeline.query(inp)
-        await send_json({"type": "result", **resp.model_dump(mode="json")})
+        s = app.state.settings
+        await send_json({"type": "result", **public_response(resp.model_dump(mode="json"), s, s.expose_debug)})
         job = app.state.audio.get(resp.audio_id) if resp.audio_id else None
         if job:
             state["audio_task"] = asyncio.create_task(send_audio(job))
