@@ -182,6 +182,7 @@ class QueryResponse(BaseModel):
     session_id: str
     status: Status
     transcript: str | None = None
+    detected_language: str | None = None
     lang: str
     intent: Intent | None = None
     mode: Literal["lookup", "compare"] | None = None

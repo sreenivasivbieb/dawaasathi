@@ -45,9 +45,14 @@ const state = {
   busy: false,
   audio: null,
   speaking: false,
+  autoSpeak: storage.get("autoSpeak", true),
   voiceConversation: false,
   chemistOpen: false,
   fresh: false,
+  statusKey: null,
+  connectionKey: null,
+  lastError: null,
+  historyThreads: [],
 };
 if (!Array.isArray(state.threads)) state.threads = [];
 state.threads = state.threads
@@ -55,8 +60,9 @@ state.threads = state.threads
   .slice(0, 50);
 const emptyResult = $("result").innerHTML;
 let toastTimer;
-function toast(message) {
-  $("toast").textContent = message;
+function toast(key) {
+  state.toastKey = key;
+  $("toast").textContent = t(state.lang, key);
   $("toast").hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -74,7 +80,7 @@ async function api(path, { form, json, method } = {}) {
   } catch {
     throw {
       code: "NETWORK",
-      message: "Connection failed. Check your connection and retry.",
+      message: t(state.lang, "err_network"),
     };
   }
   let body;
@@ -83,25 +89,27 @@ async function api(path, { form, json, method } = {}) {
   } catch {
     throw {
       code: "INVALID_RESPONSE",
-      message: "The service returned an unreadable response. Please retry.",
+      message: t(state.lang, "err_generic"),
     };
   }
   if (!response.ok)
     throw (
       body.error || {
         code: "HTTP_" + response.status,
-        message: "Request failed.",
+        message: t(state.lang, "err_generic"),
       }
     );
   return body;
 }
 function showError(error) {
+  state.lastError = error;
   $("result-status").hidden = false;
   $("request-error").hidden = false;
   $("request-error").innerHTML = String(renderError(error, state.lang));
-  $("result-status").textContent = "Check failed · you can retry";
+  setStatus("err_title");
 }
 function clearError() {
+  state.lastError = null;
   $("request-error").hidden = true;
   $("request-error").innerHTML = "";
 }
@@ -119,7 +127,7 @@ function setBusy(busy) {
   $("q").disabled = busy;
   if (busy) {
     $("result-status").hidden = false;
-    $("result-status").textContent = "Checking…";
+    setStatus("mic_thinking");
   }
   renderMic();
 }
@@ -157,7 +165,8 @@ function receive(response, user) {
   state.last = response;
   state.fresh = true;
   state.chemistOpen = false;
-  if (user) state.messages.push({ role: "user", text: user });
+  if (user)
+    state.messages.push({ role: "user", text: response.transcript || user });
   state.messages.push({
     role: "assistant",
     text: response.script?.text || response.card?.title || response.status,
@@ -165,14 +174,15 @@ function receive(response, user) {
   renderCurrent();
   renderMessages();
   $("result-status").hidden = false;
-  $("result-status").textContent =
+  setStatus(
     response.status === "needs_confirmation"
-      ? "Choose a medicine below"
+      ? "confirm_q"
       : response.status === "needs_image"
-        ? "Photo needed"
+        ? "photo_hint"
         : response.status === "error"
-          ? "Could not complete check"
-          : "Result received";
+          ? "err_title"
+          : "reply",
+  );
 }
 async function ask({ text = $("q").value.trim(), wav } = {}) {
   if (state.busy || rec.on) return;
@@ -188,6 +198,7 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
   form.set("channel", "web");
   if (state.session) form.set("session_id", state.session);
   if (text) form.set("text", text);
+  if (wav) form.set("detect_language", "true");
   if (wav)
     form.set("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
   for (const [kind, file] of Object.entries(state.photos))
@@ -204,7 +215,8 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
     const response = await api("/v1/query", { form });
     receive(response, label);
     state.voiceConversation = !!wav;
-    if (wav && response.status !== "error") playResponse(response);
+    if (state.autoSpeak) playResponse(response);
+    openHistory(true);
     // Preserve typed input and attachments when the pipeline itself reports a failure.
     if (response.status !== "error") {
       $("q").value = "";
@@ -219,6 +231,7 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
 async function confirm(candidate, none = false) {
   if (state.busy || !state.session) return;
   stopAudio();
+  unlockAudio();
   clearError();
   setBusy(true);
   try {
@@ -231,13 +244,14 @@ async function confirm(candidate, none = false) {
           session_id: state.session,
           candidate_id: candidate || null,
           none,
-          lang: state.lang,
+          lang: state.voiceConversation
+            ? state.last?.lang || state.lang
+            : state.lang,
         },
       }),
       choice || t(state.lang, "none_of_these"),
     );
-    if (state.voiceConversation && state.last?.status !== "error")
-      playResponse(state.last);
+    if (state.autoSpeak) playResponse(state.last);
   } catch (error) {
     showError(error);
   } finally {
@@ -282,9 +296,7 @@ function playResponse(response) {
       onended: onend,
       onerror: () => {
         onend();
-        toast(
-          "Gnani audio unavailable. Reading the answer using your browser.",
-        );
+        toast("voice_fallback");
         readInBrowser();
       },
     });
@@ -353,7 +365,7 @@ function renderMic() {
             ? "mic_idle"
             : "err_STT_NOT_CONFIGURED",
   );
-  $("voice-badge").textContent = LANG_NAMES[state.lang];
+  $("voice-badge").textContent = t(state.lang, "voice_auto");
   $("voice-badge").classList.toggle("connected", connected);
   $("voice-setup").hidden = connected;
   $("mic-status").hidden = false;
@@ -402,12 +414,7 @@ async function toggleRecording() {
     rec.timer = setTimeout(finishRecording, 22000);
     renderMic();
   } catch (error) {
-    toast(
-      t(
-        state.lang,
-        error.name === "NotAllowedError" ? "mic_denied" : "mic_unsupported",
-      ),
-    );
+    toast(error.name === "NotAllowedError" ? "mic_denied" : "mic_unsupported");
   } finally {
     if (epoch === rec.epoch) rec.starting = false;
     renderMic();
@@ -426,10 +433,12 @@ function cancelRecording() {
 function finishRecording() {
   if (!rec.on) return;
   const wav =
-    rec.heard && rec.ms >= 400 ? encodeWav(rec.frames, mic.targetRate) : null;
+    rec.frames.length > 0 && rec.ms >= 400
+      ? encodeWav(rec.frames, mic.targetRate)
+      : null;
   cancelRecording();
   if (wav) ask({ text: "", wav });
-  else toast(t(state.lang, "no_speech"));
+  else toast("no_speech");
 }
 function setPhoto(kind, file) {
   if (
@@ -445,8 +454,8 @@ function setPhoto(kind, file) {
   ) {
     toast(
       file.size > (state.cfg?.max_image_bytes || 10 * 1024 * 1024)
-        ? t(state.lang, "err_TOO_LARGE")
-        : t(state.lang, "err_UNSUPPORTED_MEDIA"),
+        ? "err_TOO_LARGE"
+        : "err_UNSUPPORTED_MEDIA",
     );
     $("in-" + kind).value = "";
     return;
@@ -474,24 +483,30 @@ function renderThumbs() {
     })
     .join("");
 }
+function renderHistory() {
+  const threads = state.historyThreads;
+  $("history-list").innerHTML = threads.length
+    ? threads
+        .map(
+          (thread) =>
+            `<li><span>${esc(thread.title || t(state.lang, "attached_photo"))}<small>${esc(new Date(thread.updated_at).toLocaleString(state.lang + "-IN"))} · ${esc(t(state.lang, "history_messages", { n: thread.messages }))}</small></span><button type="button" data-thread-open="${esc(thread.id)}">${esc(t(state.lang, "open"))}</button><button type="button" data-thread-delete="${esc(thread.id)}">${esc(t(state.lang, "history_delete"))}</button></li>`,
+        )
+        .join("")
+    : `<li>${esc(t(state.lang, "history_empty"))}</li>`;
+}
 async function openHistory(refresh = false) {
   if ((!refresh && state.busy) || rec.on) return;
-  if (!$("history").open) $("history").showModal();
-  $("history-list").innerHTML = "<li>Loading…</li>";
+  if (!refresh) $("history").classList.add("is-open");
+  $("history-list").innerHTML = `<li>${esc(t(state.lang, "loading"))}</li>`;
   try {
     const { threads } = await api(
       "/v1/threads?ids=" + encodeURIComponent(state.threads.join(",")),
     );
-    $("history-list").innerHTML = threads.length
-      ? threads
-          .map(
-            (thread) =>
-              `<li><span>${esc(thread.title || t(state.lang, "attached_photo"))}<small>${esc(new Date(thread.updated_at).toLocaleString())} · ${esc(t(state.lang, "history_messages", { n: thread.messages }))}</small></span><button type="button" data-thread-open="${esc(thread.id)}">Open</button><button type="button" data-thread-delete="${esc(thread.id)}">${esc(t(state.lang, "history_delete"))}</button></li>`,
-          )
-          .join("")
-      : `<li>${esc(t(state.lang, "history_empty"))}</li>`;
+    state.historyThreads = threads;
+    renderHistory();
   } catch (error) {
-    $("history-list").innerHTML = `<li>${esc(error.message)}</li>`;
+    $("history-list").innerHTML =
+      `<li>${esc(t(state.lang, "err_generic"))}</li>`;
   }
 }
 async function loadThread(id, close = true) {
@@ -500,7 +515,9 @@ async function loadThread(id, close = true) {
   clearError();
   stopAudio();
   try {
-    const thread = await api("/v1/threads/" + encodeURIComponent(id));
+    const thread = await api(
+      "/v1/threads/" + encodeURIComponent(id) + "/localized?lang=" + state.lang,
+    );
     state.session = id;
     storage.set("session", id);
     state.messages = thread.messages;
@@ -520,9 +537,8 @@ async function loadThread(id, close = true) {
     $("q").value = "";
     renderCurrent();
     renderMessages();
-    $("result-status").textContent =
-      "Saved result · ask again for a fresh check";
-    if (close) $("history").close();
+    setStatus("status_saved");
+    if (close) $("history").classList.remove("is-open");
   } catch (error) {
     if (error.code === "THREAD_NOT_FOUND") {
       state.threads = state.threads.filter((x) => x !== id);
@@ -545,10 +561,10 @@ async function deleteThread(id) {
     state.threads = state.threads.filter((x) => x !== id);
     storage.set("threads", state.threads);
     if (state.session === id) reset();
-    toast(t(state.lang, "history_deleted"));
+    toast("history_deleted");
     await openHistory(true);
   } catch (error) {
-    toast(error.message);
+    toast("err_generic");
   } finally {
     setBusy(false);
   }
@@ -568,14 +584,42 @@ function reset() {
   $("q").value = "";
   renderCurrent();
   renderMessages();
+  state.statusKey = null;
   $("result-status").textContent = "";
   $("result-status").hidden = true;
 }
+function setStatus(key) {
+  state.statusKey = key;
+  $("result-status").textContent = t(state.lang, key);
+}
+function renderConnection() {
+  $("connection").textContent = state.connectionKey
+    ? t(state.lang, state.connectionKey)
+    : "";
+}
 function translate() {
+  if (state.toastKey) $("toast").textContent = t(state.lang, state.toastKey);
   document.documentElement.lang = state.lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(state.lang, el.dataset.i18n);
   });
+  document
+    .querySelectorAll("[data-i18n-aria]")
+    .forEach((el) =>
+      el.setAttribute("aria-label", t(state.lang, el.dataset.i18nAria)),
+    );
+  document.title = t(state.lang, "page_title");
+  document.querySelector('meta[name="description"]').content = t(
+    state.lang,
+    "hero_description",
+  );
+  if (state.statusKey) setStatus(state.statusKey);
+  if (state.lastError)
+    $("request-error").innerHTML = String(
+      renderError(state.lastError, state.lang),
+    );
+  renderConnection();
+  renderHistory();
   $("q").placeholder = t(state.lang, "type_placeholder");
   renderMic();
   renderCurrent();
@@ -589,15 +633,15 @@ async function connect() {
       (source) =>
         /synthetic|fixture|demo|seed_dev/i.test(JSON.stringify(source)),
     );
-    $("connection").textContent = synthetic
-      ? "Demo data · Medicine details and prices are for demonstration only."
-      : "";
+    state.connectionKey = synthetic ? "demo_notice" : null;
+    renderConnection();
     $("connection").hidden = !synthetic;
     $("connection").classList.toggle("warning", synthetic);
     $("retry-connection").hidden = true;
   } catch {
     state.cfg = null;
-    $("connection").textContent = "Unable to connect. Please retry.";
+    state.connectionKey = "connection_error";
+    renderConnection();
     $("connection").hidden = false;
     $("connection").classList.add("warning");
     $("retry-connection").hidden = false;
@@ -609,14 +653,42 @@ $("lang").innerHTML = LANGS.map(
   (lang) => `<option value="${lang}">${LANG_NAMES[lang]}</option>`,
 ).join("");
 $("lang").value = state.lang;
-$("lang").addEventListener("change", () => {
+$("lang").addEventListener("change", async () => {
   stopAudio();
+  state.voiceConversation = false;
   state.lang = $("lang").value;
   storage.set("lang", state.lang);
   translate();
+  if (state.session && state.last) {
+    const selectedLang = state.lang;
+    setBusy(true);
+    try {
+      const thread = await api(
+        "/v1/threads/" +
+          encodeURIComponent(state.session) +
+          "/localized?lang=" +
+          selectedLang,
+      );
+      if (state.lang === selectedLang) {
+        state.messages = thread.messages;
+        state.last =
+          [...thread.messages].reverse().find((m) => m.response)?.response ||
+          null;
+        state.fresh = false;
+        renderCurrent();
+        renderMessages();
+        setStatus("status_saved");
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
 });
 $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
+  unlockAudio();
   ask();
 });
 $("mic").addEventListener("click", toggleRecording);
@@ -638,7 +710,7 @@ document.body.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   if (button.dataset.close) {
-    $(button.dataset.close).close();
+    $(button.dataset.close).classList.remove("is-open");
     return;
   }
   if (button.dataset.threadOpen) {
@@ -686,8 +758,15 @@ window.addEventListener("pagehide", () => {
   stopAudio();
   state.urls.forEach((url) => URL.revokeObjectURL(url));
 });
+$("auto-speak").checked = state.autoSpeak;
+$("auto-speak").addEventListener("change", () => {
+  state.autoSpeak = $("auto-speak").checked;
+  storage.set("autoSpeak", state.autoSpeak);
+  if (!state.autoSpeak) stopAudio();
+});
 translate();
 await connect();
+await openHistory(true);
 if (state.session) await loadThread(state.session, false);
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("/sw.js").catch(() => {});

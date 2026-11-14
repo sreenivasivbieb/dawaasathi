@@ -43,7 +43,6 @@ LANGS: dict[str, tuple[str, str]] = {
     "bn": ("bn-IN", "bn-IN"),
     "gu": ("gu-IN", "gu-IN"),
     "pa": ("pa-IN", "pa-IN"),
-    "or": ("or-IN", "or-IN"),
     "ta": ("ta-IN", "ta-IN"),
     "te": ("te-IN", "te-IN"),
     "kn": ("kn-IN", "kn-IN"),

@@ -65,6 +65,7 @@ globalThis.fetch = async (path, options) => {
     audioRequests.push({
       lang: options.body.get("lang"),
       file: options.body.get("audio"),
+      detect_language: options.body.get("detect_language"),
     });
     // Controlled transcript: exercise the real pipeline and browser playback without claiming STT.
     options.body.set("text", "Dolo 650 price and generic");
@@ -90,7 +91,8 @@ const checks = [];
 for (const lang of LANGS) {
   $("#lang").value = lang;
   $("#lang").dispatchEvent(new dom.window.Event("change"));
-  assert.equal($("#voice-badge").textContent, LANG_NAMES[lang]);
+  await wait(() => $(".results").getAttribute("aria-busy") === "false");
+  assert.equal($("#voice-badge").textContent, t(lang, "voice_auto"));
   assert.equal($("#mic").getAttribute("aria-label"), t(lang, "mic_aria_start"));
   assert.equal($("#mic-label").textContent, t(lang, "mic_idle"));
   const previous = audioRequests.length;
@@ -122,6 +124,30 @@ for (const lang of LANGS) {
   });
   console.log("PASS voice controls and language routing:", lang);
 }
+// Manual submission must not discard a quiet but complete microphone recording.
+const quietBefore = audioRequests.length;
+$("#mic").click();
+await wait(() => $("#mic").dataset.state === "recording");
+for (let i = 0; i < 10; i++)
+  micInstance.onframe(new Int16Array(800).fill(20), 0.0006, 50);
+$("#mic").click();
+await wait(
+  () =>
+    audioRequests.length === quietBefore + 1 &&
+    $(".results").getAttribute("aria-busy") === "false",
+);
+assert.equal(audioRequests.at(-1).detect_language, "true");
+assert.ok($(".history-sidebar"));
+assert.equal($("#auto-speak").checked, true);
+const spokenBeforeMute = spoken.length;
+$("#auto-speak").checked = false;
+$("#auto-speak").dispatchEvent(new dom.window.Event("change"));
+$("#q").value = "Dolo 650 price";
+$("#ask").dispatchEvent(
+  new dom.window.Event("submit", { bubbles: true, cancelable: true }),
+);
+await wait(() => $(".results").getAttribute("aria-busy") === "false");
+assert.equal(spoken.length, spokenBeforeMute);
 const count = audioRequests.length;
 $("#mic").click();
 await wait(() => $("#mic").dataset.state === "recording");
@@ -137,6 +163,9 @@ const report = {
   gnani_live_verified: false,
   audible_playback_verified: false,
   cancel_without_submission: true,
+  quiet_manual_recording_submitted: true,
+  mute_toggle_verified: true,
+  history_sidebar_present: true,
 };
 if (process.env.DAWA_VOICE_REPORT)
   await writeFile(
@@ -144,7 +173,7 @@ if (process.env.DAWA_VOICE_REPORT)
     JSON.stringify(report, null, 2) + "\n",
   );
 console.log(
-  "11/11 voice-language flows passed; live Gnani and physical capture not verified.",
+  "10/10 voice-language flows passed; live Gnani and physical capture not verified.",
 );
 dom.window.close();
 process.exit(0);

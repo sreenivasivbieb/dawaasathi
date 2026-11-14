@@ -48,7 +48,7 @@ def main():
         try:
             check("health", client.get("/healthz").json().get("ok"))
             cfg = client.get("/v1/config").json()
-            check("config matches supported upload limits and languages", cfg.get("max_image_bytes", 0) > 0 and len(cfg["languages"]) == 11)
+            check("config matches supported upload limits and languages", cfg.get("max_image_bytes", 0) > 0 and len(cfg["languages"]) == 10)
             check("search endpoint finds Dolo", bool(client.get("/v1/drugs/search", params={"q": "Dolo 650"}).json()["results"]))
             data, elapsed = query("Dolo 650 price and generic")
             check("typed lookup", data["status"] == "ok" and "Dolo" in data["match"]["brand"], {"seconds": elapsed})

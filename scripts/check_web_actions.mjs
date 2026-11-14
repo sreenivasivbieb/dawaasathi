@@ -26,6 +26,9 @@ dom.window.HTMLDialogElement.prototype.close = function () {
 };
 const errors = [];
 process.on("unhandledRejection", (e) => errors.push(e));
+globalThis.AudioContext = class {
+  state = "running";
+};
 const nativeFetch = globalThis.fetch;
 let failNext = false;
 globalThis.fetch = (path, options) => {
@@ -109,6 +112,7 @@ check("history reopens actual saved conversation", () => {
 });
 $("#lang").value = "hi";
 $("#lang").dispatchEvent(new dom.window.Event("change"));
+await wait(() => $(".results").getAttribute("aria-busy") === "false");
 check("language change updates labels and existing result", () => {
   assert.equal(document.documentElement.lang, "hi");
   assert.equal($("#send").textContent, "भेजें");
@@ -116,6 +120,7 @@ check("language change updates labels and existing result", () => {
 });
 $("#lang").value = "en";
 $("#lang").dispatchEvent(new dom.window.Event("change"));
+await wait(() => $(".results").getAttribute("aria-busy") === "false");
 $("#btn-new").click();
 check("new conversation clears previous result", () =>
   assert.equal($("#result").textContent.trim(), ""),

@@ -15,222 +15,280 @@
     <script type="module" src="/app.js"></script>
   </head>
   <body>
-    <a class="skip-link" href="#q">Skip to medicine check</a>
+    <a class="skip-link" href="#q" data-i18n="skip">Skip to medicine check</a>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Dawaa Saathi home"
-        ><span class="brand-mark" aria-hidden="true">✚</span
-        ><span>Dawaa Saathi</span></a
+      <a
+        class="brand"
+        href="/"
+        aria-label="Dawaa Saathi home"
+        data-i18n-aria="home"
+        ><span class="brand-mark" aria-hidden="true"
+          ><img src="/icons/icon.svg" alt="" width="40" height="40" /></span
+        ><span data-i18n="app_name">Dawaa Saathi</span></a
       >
-      <nav aria-label="Conversations">
+      <nav aria-label="Conversations" data-i18n-aria="history_title">
         <button type="button" id="btn-history" data-i18n="history">
-          History</button
-        ><button type="button" id="btn-new" data-i18n="new_chat">
-          New conversation
+          History
         </button>
       </nav>
       <label class="language"
         ><span data-i18n="lang_label">Language</span
-        ><select id="lang" aria-label="Language"></select
+        ><select
+          id="lang"
+          aria-label="Language"
+          data-i18n-aria="lang_label"
+        ></select
       ></label>
     </header>
-    <main>
-      <div class="hero-scene" aria-hidden="true">
-        <div class="scene-arch scene-arch--left"></div>
-        <div class="scene-arch scene-arch--right"></div>
-        <div class="scene-horizon"></div>
-        <div class="scene-rings"></div>
-      </div>
-      <section class="intro">
-        <span class="hero-kicker"
-          ><span class="status-dot" aria-hidden="true"></span> YOUR MEDICINE
-          COMPANION</span
-        >
-        <h1>A little clarity.<br />A lot more <em>care.</em></h1>
-        <p>
-          Understand your medicine, compare your prescription,<br
-            class="desktop-break"
-          />
-          and explore price references. Just ask.
-        </p>
-        <div class="hero-tags">
-          <span>Speak in your language</span><span>Check a prescription</span
-          ><span>Understand the price</span>
+    <div class="app-layout">
+      <aside
+        id="history"
+        aria-labelledby="history-title"
+        class="history-sidebar"
+      >
+        <div class="dialog-heading">
+          <h2 id="history-title" data-i18n="history_title">
+            Past conversations
+          </h2>
+          <button type="button" data-close="history" data-i18n="close">
+            Close
+          </button>
         </div>
-      </section>
-      <div class="service-notice">
-        <p id="connection" class="notice" role="status" hidden></p>
-        <button type="button" id="retry-connection" hidden>
-          Retry connection
+        <p data-i18n="history_note">
+          Only conversations started on this device are shown here.
+        </p>
+        <button type="button" id="btn-new" data-i18n="new_chat">
+          New conversation
         </button>
-      </div>
-      <div class="workspace">
+        <ul id="history-list" class="plain-list"></ul>
+      </aside>
+      <main>
+        <div class="hero-scene" aria-hidden="true">
+          <div class="scene-arch scene-arch--left"></div>
+          <div class="scene-arch scene-arch--right"></div>
+          <div class="scene-horizon"></div>
+          <div class="scene-rings"></div>
+        </div>
+        <section class="intro">
+          <span class="hero-kicker"
+            ><span class="status-dot" aria-hidden="true"></span
+            ><span data-i18n="hero_kicker">YOUR MEDICINE COMPANION</span></span
+          >
+          <h1>
+            <span data-i18n="hero_line1">A little clarity.</span><br /><span
+              data-i18n="hero_line2"
+              >A lot more</span
+            >
+            <em data-i18n="hero_care">care.</em>
+          </h1>
+          <p data-i18n="hero_description">
+            Understand your medicine, compare your prescription,<br
+              class="desktop-break"
+            />
+            and explore price references. Just ask.
+          </p>
+          <div class="hero-tags">
+            <span data-i18n="tag_voice">Speak in your language</span
+            ><span data-i18n="tag_rx">Check a prescription</span
+            ><span data-i18n="tag_price">Understand the price</span>
+          </div>
+        </section>
+        <div class="service-notice">
+          <p id="connection" class="notice" role="status" hidden=""></p>
+          <button
+            type="button"
+            id="retry-connection"
+            hidden=""
+            data-i18n="refresh_connection"
+          >
+            Retry connection
+          </button>
+        </div>
+        <div class="workspace">
+          <section
+            class="voice-panel"
+            id="voice-panel"
+            data-state="idle"
+            aria-labelledby="voice-title"
+          >
+            <div class="voice-topline">
+              <span class="voice-provider" data-i18n="gnani_voice"
+                >GNANI VOICE</span
+              ><span id="voice-badge" class="voice-badge"
+                >Checking connection</span
+              >
+            </div>
+            <div class="orb-stage">
+              <div class="orb-halo" aria-hidden="true"></div>
+              <button
+                id="mic"
+                type="button"
+                disabled=""
+                data-state="idle"
+                aria-label="Start speaking"
+                aria-describedby="mic-status"
+              >
+                <span class="voice-orb" aria-hidden="true"></span
+                ><svg
+                  class="mic-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="9"
+                    y="3"
+                    width="6"
+                    height="12"
+                    rx="3"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  ></rect>
+                  <path
+                    d="M5.5 10.5V12a6.5 6.5 0 0 0 13 0v-1.5M12 18.5V22m-3 0h6"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  ></path>
+                </svg>
+              </button>
+            </div>
+            <h2 id="voice-title">Let’s talk medicine.</h2>
+            <p id="mic-label" class="voice-action">Tap the orb to speak</p>
+            <div class="voice-wave" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+              ><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <p id="mic-status" class="hint" role="status">
+              Checking voice availability…
+            </p>
+            <button id="voice-stop" type="button" hidden="">Stop voice</button>
+            <details id="voice-setup" hidden="">
+              <summary data-i18n="connect_voice">Connect Gnani voice</summary>
+              <p data-i18n="voice_setup">
+                Add <code>GNANI_API_KEY</code> to the server’s
+                <code>.env</code> file and restart the server. Your key stays on
+                the server.
+              </p>
+              <button
+                id="refresh-voice"
+                type="button"
+                data-i18n="refresh_connection"
+              >
+                Check connection
+              </button>
+            </details>
+            <label class="auto-speak"
+              ><input id="auto-speak" type="checkbox" checked="" /><span
+                data-i18n="spoken_replies"
+                >Spoken replies</span
+              ></label
+            >
+            <div class="voice-caption">
+              Prisma <span data-i18n="voice_listens"></span> · Timbre
+              <span data-i18n="voice_speaks"></span>
+            </div>
+          </section>
+          <section
+            class="composer panel"
+            aria-label="Medicine question"
+            data-i18n-aria="type_label"
+          >
+            <div class="composer-heading">
+              <span class="eyebrow" data-i18n="composer_eyebrow"
+                >ASK · UPLOAD · UNDERSTAND</span
+              >
+              <h2 data-i18n="composer_title">Your medicine, made clearer.</h2>
+              <p data-i18n="composer_hint">
+                Type a question or share a photo of what’s in front of you.
+              </p>
+            </div>
+            <form id="ask">
+              <label for="q" data-i18n="type_label">Type your question</label>
+              <textarea
+                id="q"
+                name="text"
+                rows="3"
+                maxlength="500"
+                placeholder="e.g. Dolo 650 price and generic"
+              ></textarea>
+              <div class="upload-row">
+                <button
+                  type="button"
+                  data-act="pick"
+                  data-kind="strip"
+                  data-i18n="strip_photo"
+                >
+                  Strip photo</button
+                ><button
+                  type="button"
+                  data-act="pick"
+                  data-kind="rx"
+                  data-i18n="rx_photo"
+                >
+                  Prescription photo
+                </button>
+              </div>
+              <p class="hint" data-i18n="comparison_hint">
+                Attach both photos to check whether the dispensed medicine
+                matches the prescription.
+              </p>
+              <input
+                id="in-strip"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden=""
+              />
+              <input
+                id="in-rx"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden=""
+              />
+              <div id="thumbs" class="thumbs"></div>
+              <div class="send-row">
+                <button
+                  id="send"
+                  class="btn--primary"
+                  type="submit"
+                  data-i18n="send"
+                >
+                  Check medicine
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
         <section
-          class="voice-panel"
-          id="voice-panel"
-          data-state="idle"
-          aria-labelledby="voice-title"
+          class="results"
+          aria-label="Medicine result"
+          aria-busy="false"
+          data-i18n-aria="reply"
         >
-          <div class="voice-topline">
-            <span class="voice-provider">GNANI VOICE</span
-            ><span id="voice-badge" class="voice-badge"
-              >Checking connection</span
-            >
-          </div>
-          <div class="orb-stage">
-            <div class="orb-halo" aria-hidden="true"></div>
-            <button
-              id="mic"
-              type="button"
-              disabled
-              data-state="idle"
-              aria-label="Start speaking"
-              aria-describedby="mic-status"
-            >
-              <span class="voice-orb" aria-hidden="true"></span
-              ><svg
-                class="mic-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <rect
-                  x="9"
-                  y="3"
-                  width="6"
-                  height="12"
-                  rx="3"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                />
-                <path
-                  d="M5.5 10.5V12a6.5 6.5 0 0 0 13 0v-1.5M12 18.5V22m-3 0h6"
-                  stroke="currentColor"
-                  stroke-width="1.6"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
-          </div>
-          <h2 id="voice-title">Let’s talk medicine.</h2>
-          <p id="mic-label" class="voice-action">Tap the orb to speak</p>
-          <div class="voice-wave" aria-hidden="true">
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
-            ><i></i><i></i><i></i><i></i><i></i><i></i>
-          </div>
-          <p id="mic-status" class="hint" role="status">
-            Checking voice availability…
-          </p>
-          <button id="voice-stop" type="button" hidden>Stop voice</button>
-          <details id="voice-setup" hidden>
-            <summary>Connect Gnani voice</summary>
-            <p>
-              Add <code>GNANI_API_KEY</code> to the server’s
-              <code>.env</code> file and restart the server. Your key stays on
-              the server.
-            </p>
-            <button id="refresh-voice" type="button">Check connection</button>
-          </details>
-          <div class="voice-caption">
-            Prisma listens <span aria-hidden="true">·</span> Timbre speaks
-          </div>
+          <p id="result-status" class="muted" role="status" hidden=""></p>
+          <div id="request-error" role="alert" hidden=""></div>
+          <div id="result" aria-live="polite"></div>
         </section>
-        <section class="composer panel" aria-label="Medicine question">
-          <div class="composer-heading">
-            <span class="eyebrow">ASK · UPLOAD · UNDERSTAND</span>
-            <h2>Your medicine, made clearer.</h2>
-            <p>Type a question or share a photo of what’s in front of you.</p>
-          </div>
-          <form id="ask">
-            <label for="q" data-i18n="type_label">Type your question</label>
-            <textarea
-              id="q"
-              name="text"
-              rows="3"
-              maxlength="500"
-              placeholder="e.g. Dolo 650 price and generic"
-            ></textarea>
-            <div class="upload-row">
-              <button
-                type="button"
-                data-act="pick"
-                data-kind="strip"
-                data-i18n="strip_photo"
-              >
-                Strip photo</button
-              ><button
-                type="button"
-                data-act="pick"
-                data-kind="rx"
-                data-i18n="rx_photo"
-              >
-                Prescription photo
-              </button>
-            </div>
-            <p class="hint">
-              Attach both photos to check whether the dispensed medicine matches
-              the prescription.
-            </p>
-            <input
-              id="in-strip"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              hidden
-            />
-            <input
-              id="in-rx"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              hidden
-            />
-            <div id="thumbs" class="thumbs"></div>
-            <div class="send-row">
-              <button
-                id="send"
-                class="btn--primary"
-                type="submit"
-                data-i18n="send"
-              >
-                Check medicine
-              </button>
-            </div>
-          </form>
-        </section>
-      </div>
-      <section class="results" aria-label="Medicine result" aria-busy="false">
-        <p id="result-status" class="muted" role="status" hidden></p>
-        <div id="request-error" role="alert" hidden></div>
-        <div id="result" aria-live="polite"></div>
-      </section>
-      <details id="conversation" hidden>
-        <summary data-i18n="history_title">Conversation</summary>
-        <div id="thread"></div>
-      </details>
-      <footer class="page-footer">
-        <p data-i18n="doctor_footer">Confirm with a doctor or pharmacist.</p>
-        <details class="privacy">
-          <summary>Privacy &amp; history</summary>
-          <p data-i18n="consent_1">
-            Voice and photos are processed for the check and not stored.
-          </p>
-          <p data-i18n="consent_5">
-            Conversation text is saved for history. You can delete it from
-            History.
-          </p>
+        <details id="conversation" hidden="">
+          <summary data-i18n="history_title">Conversation</summary>
+          <div id="thread"></div>
         </details>
-      </footer>
-    </main>
-    <dialog id="history" aria-labelledby="history-title">
-      <div class="dialog-heading">
-        <h2 id="history-title" data-i18n="history_title">Past conversations</h2>
-        <button type="button" data-close="history" data-i18n="close">
-          Close
-        </button>
-      </div>
-      <p data-i18n="history_note">
-        Only conversations started on this device are shown here.
-      </p>
-      <ul id="history-list" class="plain-list"></ul>
-    </dialog>
-    <div id="toast" class="toast" role="status" hidden></div>
+        <footer class="page-footer">
+          <p data-i18n="doctor_footer">Confirm with a doctor or pharmacist.</p>
+          <details class="privacy">
+            <summary data-i18n="privacy">Privacy &amp; history</summary>
+            <p data-i18n="consent_1">
+              Voice and photos are processed for the check and not stored.
+            </p>
+            <p data-i18n="consent_5">
+              Conversation text is saved for history. You can delete it from
+              History.
+            </p>
+          </details>
+        </footer>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden=""></div>
   </body>
 </html>

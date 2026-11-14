@@ -1,7 +1,7 @@
 // Service worker: keeps the app shell (HTML, JS, CSS, icon) available offline and fast to open.
 // API calls (/v1/*, /healthz, /metrics) always go to the network and are never cached: answers,
 // prices and chat history must be current.
-const VERSION = "dawa-shell-v6";
+const VERSION = "dawa-shell-v8";
 const SHELL = [
   "/",
   "/index.html",
@@ -14,11 +14,11 @@ const SHELL = [
   "/recorder-worklet.js",
   "/manifest.webmanifest",
   "/icons/icon.svg",
+  "/i18n/interface.js",
   "/i18n/terms.js",
   "/i18n/bn.js",
   "/i18n/gu.js",
   "/i18n/pa.js",
-  "/i18n/or.js",
   "/i18n/ta.js",
   "/i18n/te.js",
   "/i18n/kn.js",

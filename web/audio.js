@@ -114,7 +114,7 @@ export class Vad {
   push(rms, ms) {
     this.ageMs += ms;
     if (this.ageMs <= this.warmMs) {
-      this.floor = Math.max(0.0005, Math.min(this.floor, rms));
+      this.floor = Math.max(0.0005, Math.min(this.floor, rms, 0.004));
       return null;
     }
     const thr = this.threshold();
@@ -326,11 +326,14 @@ export function streamPcm(url, { onstart, onended, onerror } = {}) {
     const player = (ctl.player = new StreamPlayer(sr, { onstart, onended }));
     const dec = new PcmDecoder();
     const reader = res.body.getReader();
+    let received = 0;
     for (;;) {
       const { value, done } = await reader.read();
       if (done || ctl.stopped) break;
+      received += value.byteLength;
       player.push(dec.push(value));
     }
+    if (!ctl.stopped && received < 2) throw new Error("Empty speech audio");
     player.end();
     return player;
   })().catch((err) => {

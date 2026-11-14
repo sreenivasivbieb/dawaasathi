@@ -43,13 +43,6 @@
       "playback_language": true
     },
     {
-      "language": "or",
-      "controls": true,
-      "wav_request": true,
-      "reply_language": true,
-      "playback_language": true
-    },
-    {
       "language": "ta",
       "controls": true,
       "wav_request": true,
@@ -82,5 +75,8 @@
   "transcript": "controlled text sent with audio",
   "gnani_live_verified": false,
   "audible_playback_verified": false,
-  "cancel_without_submission": true
+  "cancel_without_submission": true,
+  "quiet_manual_recording_submitted": true,
+  "mute_toggle_verified": true,
+  "history_sidebar_present": true
 }

@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.adapters.gnani_stt import STTError
+from app.adapters.gnani_stt import STTError, detected_language
 from app.adapters.llm import GroqLLM, LLMError, nlu_to_text
 from app.adapters.ocr import OCRItem, OCRReader
 from app.config import Settings
@@ -65,6 +65,8 @@ class QueryInput:
     pouch: list[str] = field(default_factory=list)
     channel: str = "web"  # web | phone | stream
     tts_sample_rate: int | None = None
+    detect_language: bool = False
+    detected_language: str | None = None
 
 
 @dataclass
@@ -136,6 +138,7 @@ class Pipeline:
     # ================================================================== entry points
     async def query(self, inp: QueryInput) -> QueryResponse:
         resp = await self._query(inp)
+        resp.detected_language = inp.detected_language
         attachments = [k for k, v in (("audio", inp.audio), ("strip", inp.strip), ("rx", inp.rx)) if v]
         self._record(resp, inp.lang, inp.text or resp.transcript, attachments)
         return resp
@@ -185,13 +188,19 @@ class Pipeline:
             if not inp.audio:
                 return None
             t0 = time.perf_counter()
-            if not self.s.stt_dual:
-                res = await self.stt.transcribe(inp.audio, inp.audio_name, inp.lang, self.keyterms,
+            if inp.detect_language or not self.s.stt_dual:
+                res = await self.stt.transcribe(inp.audio, inp.audio_name, "auto" if inp.detect_language else inp.lang, self.keyterms,
                                                 session.last_transcript)
                 asr_meta["model"] = res.model or self.s.stt_model
             else:
                 res, dual_meta = await self._dual_asr(inp, session.last_transcript)
                 asr_meta.update(dual_meta)
+            if inp.detect_language:
+                inp.detected_language = detected_language(res.detected_lang)
+                if inp.detected_language:
+                    inp.lang = inp.detected_language
+                    session.lang = inp.lang
+                asr_meta["detected_language"] = inp.detected_language
             timings["asr"] = round((time.perf_counter() - t0) * 1000, 1)
             METRICS.observe("asr", timings["asr"])
             return res.text
@@ -234,6 +243,9 @@ class Pipeline:
                                            error_kind="service" if service else "stt", error_code=code)
         else:
             transcript = clean_input(asr_r)
+            if inp.audio and not inp.text and not transcript and not inp.strip and not inp.rx:
+                return self._finish_simple(session, inp, "error", timings, t_start,
+                                           error_kind="stt", error_code="NO_SPEECH")
             if transcript and (g := check_query(transcript)).blocked:  # spoken: before the LLM sees it
                 return self._finish_guard(session, inp, g.kind, timings, t_start, transcript)
         for r in (strip_r, rx_r):
@@ -671,6 +683,7 @@ class Pipeline:
         pending = session.pending
         session.pending = None
         turn: Turn = pending["turn"]
+        turn.lang = session.lang
         turn.timings = timings
         if transcript:
             turn.transcript = transcript

@@ -98,6 +98,7 @@ async def query(
     pouch: str | None = Form(None),
     text: str | None = Form(None),
     channel: str = Form("web"),
+    detect_language: bool = Form(True),
 ):
     rate_limit(request)
     s = request.app.state.settings
@@ -116,6 +117,7 @@ async def query(
             raise APIError(400, "AUDIO_DECODE", str(exc)) from exc
     inp = QueryInput(session_id=session_id, lang=_lang(lang), audio=audio_b, audio_name=audio_name, text=text,
                      strip=strip_b, rx=rx_b, pouch=_parse_pouch(pouch),
+                     detect_language=detect_language and bool(audio_b) and not bool(text),
                      channel=channel if channel in ("web", "phone") else "web")
     resp = await request.app.state.pipeline.query(inp)
     return JSONResponse(public_response(resp.model_dump(mode="json"), s, s.expose_debug))
@@ -366,6 +368,25 @@ async def thread_messages(request: Request, thread_id: str, limit: int = Query(2
         if message.get("response"):
             message["response"] = public_response(message["response"], request.app.state.settings, False)
     return {"id": tid, "lang": local.thread_lang(tid), "messages": messages}
+
+
+@router.get("/v1/threads/{thread_id}/localized")
+async def localized_thread(request: Request, thread_id: str, lang: str = Query("en")):
+    from app.localization import localize_response
+
+    rate_limit(request)
+    tid = _thread_id(thread_id)
+    local = request.app.state.local
+    if not local.thread_exists(tid):
+        raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
+    messages = local.messages(tid)
+    for message in messages:
+        if message.get("response"):
+            response = localize_response(message["response"], _lang(lang))
+            message["response"] = public_response(response, request.app.state.settings, False)
+            message["text"] = response["script"]["text"]
+            message["lang"] = _lang(lang)
+    return {"id": tid, "lang": _lang(lang), "messages": messages}
 
 
 @router.delete("/v1/threads/{thread_id}")

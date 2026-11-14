@@ -1,9 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0f5c4d"/>
-  <g transform="rotate(-40 256 256)">
-    <rect x="96" y="196" width="320" height="120" rx="60" fill="#ffffff"/>
-    <path d="M256 196h100a60 60 0 0 1 0 120H256z" fill="#46c3a0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="0" x2="115" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#e4f7e9"/><stop offset="1" stop-color="#b4ddd0"/></linearGradient>
+    <linearGradient id="cap" x1="40" y1="30" x2="83" y2="95" gradientUnits="userSpaceOnUse"><stop stop-color="#28765c"/><stop offset="1" stop-color="#153d32"/></linearGradient>
+  </defs>
+  <rect x="2" y="2" width="124" height="124" rx="36" fill="url(#bg)"/>
+  <rect x="2.5" y="2.5" width="123" height="123" rx="35.5" stroke="#fff" stroke-opacity=".75"/>
+  <g transform="rotate(38 60 67)">
+    <rect x="39" y="25" width="42" height="83" rx="21" fill="#f8fcf1" stroke="#205b47" stroke-width="3"/>
+    <path d="M39 66h42v21a21 21 0 0 1-42 0V66Z" fill="url(#cap)"/>
+    <path d="M49 46a11 11 0 0 1 11-11" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <path d="M40 66h40" stroke="#205b47" stroke-width="2.5"/>
   </g>
-  <circle cx="378" cy="378" r="74" fill="#ffffff"/>
-  <path d="M344 380l24 24 46-50" fill="none" stroke="#0f5c4d" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m97 18 3.8 10.2L111 32l-10.2 3.8L97 46l-3.8-10.2L83 32l10.2-3.8L97 18Z" fill="#205b47"/>
+  <circle cx="27" cy="94" r="4" fill="#5e9b7b"/>
 </svg>

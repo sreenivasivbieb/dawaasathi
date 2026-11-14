@@ -1,49 +1,48 @@
-# Gnani voice
+# Gnani speech, automatic language and chat history
 
-The voice orb uses the selected UI language. The backend routes speech recognition to Gnani
-Prisma and answer audio to Gnani Timbre. Eleven language codes are wired throughout the flow:
-`hi`, `en`, `mr`, `bn`, `gu`, `pa`, `or`, `ta`, `te`, `kn`, `ml`.
+The UI language controls labels and typed questions. Spoken questions use automatic language
+detection: the browser posts mono 16 kHz WAV with `detect_language=true`; the backend requests
+`prisma-v3.0` with `language_code=indic-auto` even if the configured legacy model is v2.5.
+The detected language controls reply templates, the session, persisted reply, and Timbre audio.
+Voice confirmations keep the detected language until the user explicitly changes the UI language.
 
-A recorded question sends a mono 16 kHz WAV and the selected `lang` to `/v1/query`. The returned
-answer plays automatically for voice questions, including a confirmation prompt. You can choose
-a candidate by voice or button, replay the answer, stop playback, or tap the orb to interrupt and
-record another question. Typed queries do not auto-play.
+Only these ten Gnani-supported languages are selectable: Hindi, English, Marathi, Bengali,
+Gujarati, Punjabi, Tamil, Telugu, Kannada and Malayalam. Odia was removed from the active language
+lists. See [Gnani's official SDK documentation](https://github.com/Gnani-AI-Mintlify/Gnani-Vachana#prisma-v30-multilingual-model)
+and its TTS language list. Historical locale assets do not add selectable languages.
 
-## Connect the provider
+Spoken replies are on by default for both typed and voice questions. The sound toggle disables
+automatic playback; replay and stop remain available. The transcript is visible in the result.
+A desktop sidebar keeps conversations visible, with open, delete and new-chat actions; on narrow
+screens the History button opens the same panel. Quiet manually submitted recordings are sent
+for recognition instead of discarded by local VAD. Empty recognition produces a recoverable
+speech error. Empty audio playback triggers the browser-speech fallback instead of failing silently.
 
-No Gnani key is currently configured in this checkout. If you do not already have a `.env`, copy
-`.env.example` to `.env`. Edit the server-side `.env` and set:
+## Run
 
-```dotenv
-GNANI_API_KEY=your_actual_gnani_key
-```
-
-Keep the key on the server. Do not put it into JavaScript, the browser console, or a URL. `.env`
-is already ignored by Git. Restart the server after setting or changing the key:
-
-```bash
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
-```
-
-Open http://127.0.0.1:8001, select a language and allow microphone access when you tap the orb.
-Microphone capture requires localhost or HTTPS. When configured, the orb becomes available.
-The connection indicator reflects server configuration, not a completed provider health check.
-An invalid key or provider error is shown when you submit speech.
-
-## Verification limits
-
-`artifacts/voice-language-checks.json` records 11 language flows through the actual client and local
-backend, using simulated microphone samples and a controlled text transcript. It checks localized
-controls, the WAV/lang request, reply language, automatic playback language and cancellation.
-It does **not** verify live Gnani recognition, audible speech quality, accent handling, browser
-microphone permissions, or physical capture. These need a configured key and device testing.
-Browser control was unavailable during this change, so visual rendering is also unverified.
-
-Repeat control checks with an isolated local server and the check-only `jsdom` dependency:
+The configured key stays in server-side `.env` as `GNANI_API_KEY`; it is never sent to the browser.
+Restart after editing environment configuration:
 
 ```bash
-JSDOM_MODULE=/tmp/dawa-ui-check/node_modules/jsdom/lib/api.js \
-DAWA_CHECK_URL=http://127.0.0.1:8002 \
-DAWA_VOICE_REPORT=artifacts/voice-language-checks.json \
-node scripts/check_voice_controls.mjs
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
+
+Open http://127.0.0.1:8001 and refresh the page. Allow microphone access when prompted.
+Microphone capture requires localhost or HTTPS. The voice indicator reflects configuration;
+errors such as an invalid key are reported when a request is made.
+
+## Evidence
+
+- `artifacts/live-spoken-language-checks.json`: **live** Gnani STT and TTS using synthesized Hindi
+  and English input. Hindi input with an English UI returned Hindi text/audio; English input with
+  a Hindi UI returned English text/audio. Generated reply WAVs were nonempty. These are synthetic
+  recordings, not physical microphone recordings, and their data/price claims use demo datasets.
+- `artifacts/voice-language-checks.json`: all ten frontend language routes, WAV upload, playback
+  language, quiet manual submission, mute control, cancellation and sidebar presence. These use
+  simulated capture and a controlled transcript; they are separate from live STT validation.
+- `artifacts/ui-language-checks.json`: all ten interface languages and changing language during
+  confirmation. Python regressions cover detected-language routing, storage, and audio jobs.
+
+Physical microphone capture, audible playback, and browser visual rendering have not been
+verified: browser control is unavailable in this environment. Live-provider checks establish the
+recorded-file API path for Hindi and English, not recognition accuracy for every accent/language.
