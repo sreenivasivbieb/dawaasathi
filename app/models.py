@@ -90,6 +90,7 @@ class DrugItem(BaseModel):
     raw_text: str | None = None
     confidence: float | None = None
     composition_uncertain: bool = False  # low-confidence OCR: salt list may be incomplete
+    category: str | None = None  # "supplement" when the pack says dietary / food supplement
 
     def salt_names(self) -> list[str]:
         return sorted({s.name for s in self.salts})

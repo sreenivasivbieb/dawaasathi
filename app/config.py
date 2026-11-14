@@ -62,6 +62,7 @@ class Settings:
     tts_sample_rate: int
     tts_speed: float
     ocr_providers: tuple[str, ...]
+    detector_model: Path
     groq_api_keys: tuple[str, ...]
     groq_vision_model: str
     groq_llm_model: str
@@ -124,7 +125,7 @@ def get_settings() -> Settings:
         tts_voice=_get("TIMBRE_VOICE", "Shivani"),
         tts_sample_rate=_int("TIMBRE_SAMPLE_RATE", 24000),
         tts_speed=_float("TIMBRE_SPEED", 1.0),
-        ocr_providers=tuple(p.strip() for p in _get("OCR_PROVIDERS", "groq,anthropic,tesseract").split(",")
+        ocr_providers=tuple(p.strip() for p in _get("OCR_PROVIDERS", "groq,anthropic,rapidocr,tesseract").split(",")
                             if p.strip()),
         groq_api_keys=tuple(dict.fromkeys(
             k.strip() for k in ((_get("GROQ_API_KEYS") or "") + "," + (_get("GROQ_API_KEY") or "")).split(",")
@@ -137,6 +138,7 @@ def get_settings() -> Settings:
         web_lookup_on=(_get("WEB_LOOKUP", "1") or "1") == "1",
         anthropic_model=_get("ANTHROPIC_OCR_MODEL", "claude-opus-5-5"),
         db_path=Path(_get("DAWA_DB_PATH", str(ROOT / "var" / "dawasaathi.db"))),
+        detector_model=Path(_get("DETECTOR_MODEL", str(ROOT / "var" / "models" / "pack_detector.onnx"))),
         cache_dir=Path(_get("DAWA_CACHE_DIR", str(ROOT / "var" / "tts_cache"))),
         session_ttl_s=_int("SESSION_TTL_S", 900),
         match_t1=_float("MATCH_T1", 0.80),

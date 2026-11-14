@@ -48,6 +48,7 @@ _SALT_PREFIX_NOISE = re.compile(r"^(each|contains|of|eq\.?|equivalent to|as)\s+"
 _KNOWN: set[str] = set(_SYNONYMS.values())
 for _canon in list(_KNOWN):
     _SYNONYMS.setdefault(_canon, _canon)
+_PHARMACOPOEIA = re.compile(r"(?<![a-z])(?:i|b|u\.?\s?s)\.?\s?p\.?(?![a-z])")
 _EQ_TO = re.compile(r"\b(?:eq\.?|equiv\.?|equivalent)\s*(?:to)?\b", re.I)
 
 
@@ -76,6 +77,7 @@ def canonical_salt(name: str) -> str:
     pieces = _EQ_TO.split(s)
     if len(pieces) > 1 and pieces[-1].strip(" .:"):
         s = pieces[-1]
+    s = _PHARMACOPOEIA.sub(" ", s)  # "Glibenclamide I.P." / "B.P." / "U.S.P."
     s = re.sub(r"[()\[\],.:]", " ", s)
     s = re.sub(r"\s+-+\s*|\s*-+\s*$", " ", s)  # "metformin hydrochloride - " (keep "n-acetyl")
     s = _SALT_PREFIX_NOISE.sub("", s)

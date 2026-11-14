@@ -22,11 +22,12 @@ from app.adapters.ocr import OCRItem, OCRReader
 from app.config import Settings
 from app.db import Store
 from app.dialogue import guard
-from app.dialogue.templates import RenderContext, Segment, brand_display, render
+from app.dialogue.templates import ANSWER_FLAG_PREFIXES, RenderContext, Segment, brand_display, render
 from app.dialogue.templates import load as load_templates
 from app.dialogue.verbalize import speakable
 from app.engine import alternatives as altmod
 from app.engine import checks, price as pricemod, rules, safety as safetymod
+from app.engine.strip_text import SaltVocab, extract_salts
 from app.engine.web_uses import WebUseLookup
 from app.engine.salts import (canonical_form, canonical_release, canonical_salt, parse_composition,
                               salt_key, strength_key)
@@ -109,6 +110,17 @@ class Pipeline:
         self.audio = audio
         self.sessions = sessions
         self.keyterms = index.keyterms(settings.stt_keyterms_n)
+        self._vocab: SaltVocab | None = None
+
+    @property
+    def vocab(self) -> SaltVocab:
+        """Every salt named by a product in the brand DB (closed set for OCR'd ingredients)."""
+        if self._vocab is None:
+            from app.engine.salts import all_salt_surface_forms
+
+            names = {s.name for b in self.store.brands.values() for s in b.salts}
+            self._vocab = SaltVocab(names, all_salt_surface_forms())
+        return self._vocab
 
     # ================================================================== entry points
     async def query(self, inp: QueryInput) -> QueryResponse:
@@ -149,6 +161,14 @@ class Pipeline:
             METRICS.count(f"ocr_provider_{res.provider}")
             ocr_meta[kind] = {"provider": res.provider, "readable": res.payload.readable,
                               "items": len(res.payload.items), "fallback_reason": res.error}
+            if res.detect is not None:
+                ocr_meta[kind]["detect"] = res.detect
+            if res.local_ms is not None:
+                ocr_meta[kind]["local_ocr_ms"] = res.local_ms
+            if res.payload.items:
+                first = res.payload.items[0]
+                ocr_meta[kind]["read"] = {"brand": first.brand, "salts": [s.name for s in first.salts],
+                                          "category": first.category, "big_text": first.big_text[:6]}
             log_event("ocr", session=session.id, kind=kind, provider=res.provider, ms=ms,
                       items=len(res.payload.items), error=res.error)
             return res
@@ -212,7 +232,8 @@ class Pipeline:
         t_match = time.perf_counter()
         strip_item = None
         if strip_res and strip_res.payload.items:
-            strip_item = self.resolve_ocr(strip_res.payload.items[0], "strip", strip_res.provider)
+            strip_item = self.resolve_ocr(strip_res.payload.items[0], "strip", strip_res.provider,
+                                          ocr_meta.setdefault("strip", {}))
         rx_items = [self.resolve_ocr(i, "rx", rx_res.provider) for i in (rx_res.payload.items if rx_res else [])]
 
         turn = Turn(lang=inp.lang, transcript=transcript, ents=_ents_summary(ents), strip_item=strip_item,
@@ -595,13 +616,32 @@ class Pipeline:
         hit = process.extractOne(canon, list(forms.keys()), scorer=fuzz.ratio)
         if hit and hit[1] >= 85:
             return forms[hit[0]]
-        return canon
+        if canon in self.vocab:
+            return self.vocab.forms[canon]
+        hits = {c for _, _, c in self.vocab.find(name)}  # "Metformin Hydrochloride I.P." -> metformin
+        if len(hits) == 1:
+            return hits.pop()
+        return self.vocab.canon(canon) or canon
 
-    def resolve_ocr(self, o: OCRItem, source: str, provider: str = "vlm") -> DrugItem:
-        salts = [SaltDose(name=self._fix_salt_name(s.name), amount=s.amount,
-                          unit=(s.unit or "").lower() or None, per_ml=s.per_ml)
-                 for s in o.salts if s.name]
-        if not salts and o.composition_text:
+    def resolve_ocr(self, o: OCRItem, source: str, provider: str = "vlm", meta: dict | None = None) -> DrugItem:
+        meta = meta if meta is not None else {}
+        local = provider.startswith(("rapidocr", "tesseract"))
+        ocr_lines = (o.raw_text or "").splitlines()
+        # Offline OCR has no structure: salts come only from the closed-set extractor, never from
+        # whatever words happen to sit next to a "mg".
+        ocr_salts = extract_salts(ocr_lines, self.vocab) if ocr_lines else []
+        salts = [] if local else [SaltDose(name=self._fix_salt_name(s.name), amount=s.amount,
+                                           unit=(s.unit or "").lower() or None, per_ml=s.per_ml)
+                                  for s in o.salts if s.name]
+        if local:
+            salts = ocr_salts
+        elif salts and ocr_salts:
+            # VLM vs printed text: if the OCR lines name salts and none of them is what the VLM said,
+            # the VLM may have read (or invented) the wrong thing; do not trust its list as complete.
+            vlm_names, seen = {s.name for s in salts}, {s.name for s in ocr_salts}
+            meta["crosscheck"] = {"vlm_salts": sorted(vlm_names), "ocr_salts": sorted(seen),
+                                  "agree": bool(vlm_names & seen)}
+        if not salts and o.composition_text and not local:
             salts = parse_composition(o.composition_text)
             for s in salts:
                 s.name = self._fix_salt_name(s.name)
@@ -616,7 +656,10 @@ class Pipeline:
         release = canonical_release(o.release) or (canonical_release(o.brand) if o.brand else None)
         item = DrugItem(source=source, brand=o.brand, salts=salts, form=form, release=release, mrp=o.mrp,
                         pack_qty=o.pack_qty, pack_unit=o.pack_unit, batch_no=o.batch_no,
-                        directions=o.directions, raw_text=o.composition_text)
+                        directions=o.directions, raw_text=o.composition_text,
+                        category="supplement" if (o.category or "").lower() == "supplement" else None)
+        if not local and meta.get("crosscheck", {}).get("agree") is False:
+            item.composition_uncertain = True
         if form is None and any(s.per_ml for s in item.salts):
             item.form = form = "oral_liquid"
         if form in ("oral_liquid", "drops") and any(s.per_ml is None for s in item.salts):
@@ -630,55 +673,103 @@ class Pipeline:
                             s.amount is None or abs((p.amount or 0) - s.amount) < 1e-6):
                         s.amount, s.unit, s.per_ml = p.amount, p.unit, p.per_ml
         brand_lines = [o.brand] if o.brand else []
-        if o.raw_text and source == "strip":  # fallback OCR: any of the first lines may hold the brand
-            brand_lines += [ln for ln in o.raw_text.splitlines() if re.search(r"[A-Za-z]{3,}", ln)][:8]
-        best = None
+        if source == "strip":  # OCR text: the largest printed lines, then the first rows
+            extra = list(o.big_text) or [ln for ln in ocr_lines if re.search(r"[A-Za-z]{3,}", ln)][:8]
+            for ln in extra:
+                ln = re.sub(r"[^\w\s.+\-]", " ", ln)
+                # "Paracetamol Tablets IP" is the composition, not a brand: matching it would pin a
+                # generic product (and its strength) that the pack never printed.
+                if ln != o.brand and not self.vocab.find(ln):
+                    brand_lines.append(ln)
+        found: list[tuple[str, MatchResult]] = []
         for line in brand_lines:
             tokens = re.findall(r"[^\s]+", line)
             nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", line)]
             res = self.index.search(tokens, strengths=nums or None, form=form, release=release,
                                     t1=self.s.match_t1, t2=self.s.match_t2)
-            if res.top and res.top.brand_id is not None and (best is None or res.top.score > best[1].top.score):
-                best = (line, res)
+            if res.top and res.top.brand_id is not None:
+                # A fuzzy hit on OCR text must be fully confident; the printed brand gets a little slack.
+                if (res.confident or (line is o.brand and res.top.score >= self.s.match_t1 - 0.05)
+                        or self._release_settles(res, release)):
+                    found.append((line, res))
             if line is o.brand and res.confident:
                 break
+        if item.category == "supplement":
+            found = []  # the brand DB is medicines only: a supplement must not become a look-alike drug
+        found.sort(key=lambda lr: -lr[1].top.score)
+        if found:
+            meta["brand_match"] = []
+        best = None
+        for line, res in found:
+            b = self.store.brands[res.top.brand_id]
+            agree = self._same_product(item.salts, b.salts)
+            meta["brand_match"].append({"line": line, "brand": b.name, "score": round(res.top.score, 3),
+                                        "salts_agree": agree})
+            if agree:
+                best = (line, res)
+                break
         if best is not None:
-            res = best[1]
-            top = res.top
-            from_printed_brand = best[0] is o.brand
-            # A fuzzy hit on raw fallback-OCR text must be fully confident before we trust it.
-            ok = res.confident or (from_printed_brand and top.score >= self.s.match_t1 - 0.05)
-            if top and top.brand_id is not None and ok:
-                b = self.store.brands[top.brand_id]
-                ocr_names = {s.name for s in item.salts}
-                consistent = not ocr_names or ocr_names == {s.name for s in b.salts}
-                if consistent:
-                    item.brand_id = b.id
-                    item.brand = b.name
-                    item.scheduled = b.scheduled
-                    item.manufacturer = item.manufacturer or b.manufacturer
-                    if not item.salts:
-                        item.salts = [s.model_copy() for s in b.salts]
-                    else:
-                        db = {s.name: s for s in b.salts}
-                        for s in item.salts:
-                            if s.amount is None and s.name in db:
-                                s.amount, s.unit, s.per_ml = db[s.name].amount, db[s.name].unit, db[s.name].per_ml
-                    item.form = item.form or b.form
-                    item.release = item.release or b.release
-                    if item.pack_qty is None:
-                        item.pack_qty, item.pack_unit = b.pack_qty, b.pack_unit
-                    if source == "rx":
-                        item.mrp = None
-                    item.confidence = round(top.score, 3)
-        if provider.startswith("tesseract") and item.brand_id is None:
-            # Fallback OCR that did not resolve to a known product: never trust the salt list as
-            # complete (a missed ingredient could hide a banned combination), drop garbled names.
+            top = best[1].top
+            b = self.store.brands[top.brand_id]
+            item.brand_id = b.id
+            item.brand = b.name
+            item.scheduled = b.scheduled
+            item.manufacturer = item.manufacturer or b.manufacturer
+            if not item.salts:
+                item.salts = [s.model_copy() for s in b.salts]
+            else:
+                db = {s.name: s for s in b.salts}
+                for s in item.salts:
+                    if s.amount is None and s.name in db:
+                        s.amount, s.unit, s.per_ml = db[s.name].amount, db[s.name].unit, db[s.name].per_ml
+            item.form = item.form or b.form
+            item.release = item.release or b.release
+            if item.pack_qty is None:
+                item.pack_qty, item.pack_unit = b.pack_qty, b.pack_unit
+            if source == "rx":
+                item.mrp = None
+            item.confidence = round(top.score, 3)
+            if local:  # the product is known: its salt list is the DB's, not a partial OCR read
+                item.salts = [s.model_copy() for s in b.salts]
+        if local and item.brand_id is None:
+            # Offline OCR that did not resolve to a known product: never trust the salt list as
+            # complete (a missed ingredient could hide a banned combination); a guessed line is no brand.
             item.composition_uncertain = True
             item.brand = None
         if item.release is None:
             item.release = self.infer_release(item)
         return item
+
+    def _release_settles(self, res: MatchResult, release: str | None) -> bool:
+        """'Diabetrol SR' 0.94 vs 'Diabetrol' 0.91 is a close call by name, but the pack printed
+        'Sustained Release': if only the top candidate in the close group has that release, take it."""
+        from app.engine.salts import release_class
+
+        top = res.top
+        if release is None or top is None or top.brand_id is None or top.score < self.s.match_t1:
+            return False
+        close = [c for c in res.candidates if c.brand_id is not None and c.score >= top.score - self.s.match_t2]
+        def fits(c: Scored) -> bool:
+            b = self.store.brands[c.brand_id]
+            return release_class(b.release or "IR", b.salt_key) == release_class(release, b.salt_key)
+
+        same = [c for c in close if fits(c)]
+        return len(same) == 1 and same[0] is top
+
+    @staticmethod
+    def _same_product(read: list[SaltDose], db: list[SaltDose]) -> bool:
+        """The read salts fit the DB product: same names, and no printed strength that differs.
+        ("Albomol" read as paracetamol 500 mg must not become "Albimol 650 mg".)"""
+        if not read:
+            return True
+        if {s.name for s in read} != {s.name for s in db}:
+            return False
+        by_name = {s.name: s for s in db}
+        for s in read:
+            a, b = s.comparable(), by_name[s.name].comparable()
+            if a is not None and b is not None and a != b:
+                return False
+        return True
 
     def infer_release(self, item: DrugItem) -> str | None:
         """No SR/ER/DR marker: use the DB consensus for this salt/strength/form, else IR."""
@@ -760,6 +851,13 @@ class Pipeline:
         flags: list[Flag] = list(verdict.flags)
         if safety.status == "possible":
             flags.append(Flag(code="POSSIBLE_BANNED", facts={"notification_ref": safety.notification_ref}))
+        strip = turn.strip_item
+        if strip is not None and target is strip:
+            if strip.category == "supplement":
+                flags.append(Flag(code="SUPPLEMENT", detail="pack says dietary / food supplement"))
+            elif strip.brand and strip.brand_id is None and strip.salts:
+                flags.append(Flag(code="BRAND_NOT_IN_DATA", detail="printed brand not in the brand DB",
+                                  facts={"printed": strip.brand}))
         for f in (
             checks.dup_salt(target, turn.pouch),
             *(await self._use_flags(target, turn.ents.get("symptom"), intent, turn)),
@@ -797,7 +895,7 @@ class Pipeline:
         rewrite = None
         # "Is it right for <symptom>?" answers are medical claims: the vetted template speaks them as is.
         # (A rewrite turned "cold is not its usual use" into "not taken in a cold", which the guard can't see.)
-        symptom_answer = any(f.code.startswith(("SYMPTOM_", "USE_")) for f in flags)
+        symptom_answer = any(f.code.startswith(ANSWER_FLAG_PREFIXES) for f in flags)
         if self.llm is not None and self.s.llm_reply and not symptom_answer:
             facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
                                                                                         "release", "mrp", "pack_qty"}),

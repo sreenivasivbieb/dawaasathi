@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.adapters.gnani_stt import MockSTT, PrismaSTT
 from app.adapters.gnani_tts import MockTTS, TimbreTTS
 from app.adapters.llm import GroqLLM
+from app.adapters.detect import PackDetector
 from app.adapters.ocr import OCRReader
 from app.api import routes, stream, whatsapp
 from app.api.routes import APIError, error_response
@@ -41,7 +43,8 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
     if tts is None:
         tts = TimbreTTS(settings, http) if settings.tts_live else MockTTS(settings.tts_sample_rate)
     if ocr is None:
-        ocr = OCRReader(settings, http)
+        detector = PackDetector(settings.detector_model)
+        ocr = OCRReader(settings, http, detector=detector if detector.available else None)
     cache = SegmentCache(settings.cache_dir, settings.tts_voice, settings.tts_model)
     audio = AudioService(tts, cache, settings.tts_sample_rate, ttl_s=settings.session_ttl_s)
     sessions = SessionStore(settings.session_ttl_s)
@@ -60,7 +63,10 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
         web_llm = llm if llm is not None else GroqLLM(settings, http)
         web_uses = WebUseLookup(Tavily(settings.tavily_api_key, http), web_llm,
                                 settings.cache_dir.parent / "web_uses.json")
-    app.state.pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses)
+    app.state.pipeline = pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses)
+    if isinstance(ocr, OCRReader) and "rapidocr" in ocr.available():
+        # Load the OCR models and the salt vocabulary off the request path (~1-2 s).
+        threading.Thread(target=lambda: (ocr.local.warm(), pipeline.vocab), daemon=True).start()
 
 
 def create_app(settings: Settings | None = None, **overrides) -> FastAPI:

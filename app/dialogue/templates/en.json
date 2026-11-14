@@ -73,7 +73,9 @@
     "flag_SYMPTOM_MISMATCH_WEB": "According to {source}, this medicine is usually used for {usual_use}; {symptom} is not its usual use.",
     "flag_USE_INFO": "This medicine is usually used for {usual_use}.",
     "flag_USE_INFO_WEB": "According to {source}, this medicine is usually used for {usual_use}.",
-    "flag_USE_UNKNOWN": "We could not find reliable information on what this medicine is used for."
+    "flag_USE_UNKNOWN": "We could not find reliable information on what this medicine is used for.",
+    "flag_SUPPLEMENT": "The pack says dietary supplement: it is a supplement, not a medicine, and is not in our medicine data. Do not use it in place of a medicine.",
+    "flag_BRAND_NOT_IN_DATA": "This brand is not in our data, so this is based on the salt printed on the pack."
   },
   "chemist": {
     "BANNED_COMBINATION": "This combination of {salt_names} appears on the government's banned list ({list_ref}, {list_date}). Could you check with the doctor for another option?",

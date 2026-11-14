@@ -31,6 +31,11 @@
   button { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
+  .photo-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px;
+               padding: 8px 14px; cursor: pointer; background: var(--card); }
+  #photoPrev { display: none; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  #photoPrev img, .thumb { max-height: 64px; max-width: 120px; border-radius: 6px; border: 1px solid var(--line); }
+  .thumb { max-height: 140px; max-width: 220px; }
   #mic { width: 72px; height: 72px; border-radius: 50%; font-size: 30px; background: var(--accent);
          color: var(--accent-ink); border: none; position: relative; flex: none; }
   #mic.rec { background: var(--bad); color: #fff; }
@@ -82,7 +87,12 @@
   </div>
   <div class="bar" style="margin-top:10px">
     <input type="text" id="text" placeholder="या टाइप करें: डोलो 650 का सस्ता विकल्प बताओ" autocomplete="off">
-    <button id="send" class="primary" type="button">Send text</button>
+    <button id="send" class="primary" type="button">Send</button>
+  </div>
+  <div class="bar" style="margin-top:10px">
+    <label class="photo-btn">📷 Pack photo<input type="file" id="photo" accept="image/*" capture="environment" hidden></label>
+    <span id="photoPrev"><img alt="Selected pack photo"><span></span><button id="photoClear" type="button">✕</button></span>
+    <small style="color:var(--muted)">Photo is sent with your next voice / text question (or alone with Send). YOLO pack detect → VLM + RapidOCR → DB match.</small>
   </div>
 
   <div id="log"></div>
@@ -92,7 +102,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const micBtn = $("mic"), statusEl = $("status"), logEl = $("log");
-  let sessionId = null, rec = null, busy = false;
+  let sessionId = null, rec = null, busy = false, photo = null;
 
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const setStatus = (t) => { statusEl.textContent = t; };
@@ -154,12 +164,14 @@
     const fd = new FormData();
     fd.append("lang", $("lang").value);
     if (sessionId) fd.append("session_id", sessionId);
-    if (wav) fd.append("audio", wav, "q.wav"); else fd.append("text", text);
+    if (wav) fd.append("audio", wav, "q.wav"); else if (text) fd.append("text", text);
+    const sentPhoto = photo;
+    if (sentPhoto) { fd.append("strip", sentPhoto, sentPhoto.name || "pack.jpg"); clearPhoto(); }
     const t0 = performance.now();
     try {
       const r = await fetch("/v1/query", { method: "POST", body: fd });
       const j = await r.json();
-      render(j, { label, wav, wall: performance.now() - t0 });
+      render(j, { label, wav, photo: sentPhoto, wall: performance.now() - t0 });
     } catch (e) {
       renderError(String(e));
     } finally {
@@ -188,7 +200,7 @@
     logEl.insertAdjacentHTML("afterbegin", `<section class="turn"><div class="body err">${esc(msg)}</div></section>`);
   }
 
-  function render(j, { label, wav, wall }) {
+  function render(j, { label, wav, photo: sentPhoto, wall }) {
     if (j.error) { renderError(`${j.error.code || "ERROR"}: ${j.error.message || JSON.stringify(j.error)}`); return; }
     sessionId = j.session_id || sessionId;
     const ds = j.data_sources || {}, llm = ds.llm || {}, asr = ds.asr || {}, tm = j.timings_ms || {};
@@ -203,6 +215,23 @@
       (asr.model ? ` ${pill(asr.model)} ${pill((tm.asr ?? "–") + " ms")}` : "") : "");
     if (asr.dual?.length) html += row("Dual ASR", asr.dual.map((d) =>
       `${pill(d.model)} score ${d.score} · ${d.ms} ms · ${esc(d.text)}`).join("<br>"));
+    if (sentPhoto) html += row("Photo", `<img class="thumb" alt="Sent pack photo" src="${URL.createObjectURL(sentPhoto)}">`);
+    const oc = ds.ocr?.strip;
+    if (oc) {
+      const d = oc.detect, rd = oc.read, cc = oc.crosscheck;
+      html += row("1 · Detect (YOLO)", !d ? pill("detector off") : d.error ? `<span class="err">${esc(d.error)}</span>` :
+        (d.pack ? `${pill(d.pack.label + " " + d.pack.conf, "ok")} ${pill("area " + d.pack.area)} ${pill(d.cropped ? "cropped" : "full photo")}`
+                : pill("no pack box → full photo", "warn")) + ` ${pill(d.ms + " ms")}`);
+      html += row("2 · Read", `${pill(oc.provider, oc.provider.startsWith("groq") || oc.provider.startsWith("anthropic") ? "ok" : "warn")}` +
+        (oc.local_ocr_ms != null ? ` ${pill("RapidOCR " + oc.local_ocr_ms + " ms")}` : "") +
+        (oc.fallback_reason ? `<br><small class="err">${esc(oc.fallback_reason)}</small>` : "") +
+        (rd ? `<br>brand: <b>${esc(rd.brand ?? "–")}</b> · salts: ${esc((rd.salts || []).join(", ") || "–")}` +
+              (rd.category ? ` · ${pill(rd.category, rd.category === "supplement" ? "warn" : "")}` : "") +
+              (rd.big_text?.length ? `<br><small>largest text: ${esc(rd.big_text.join(" | "))}</small>` : "") : ""));
+      if (cc) html += row("3 · Cross-check", `${pill(cc.agree ? "VLM = OCR" : "VLM ≠ OCR", cc.agree ? "ok" : "bad")} VLM: ${esc(cc.vlm_salts.join(", "))} · OCR: ${esc(cc.ocr_salts.join(", "))}`);
+      if (oc.brand_match?.length) html += row("4 · DB match", oc.brand_match.map((b) =>
+        `${pill(b.salts_agree ? "accepted" : "rejected: salts/strength differ", b.salts_agree ? "ok" : "warn")} “${esc(b.line)}” → ${esc(b.brand)} (${b.score})`).join("<br>"));
+    }
     if (ds.error) html += row("Error", `<span class="err">${esc(JSON.stringify(ds.error))}</span>`);
 
     const nlu = llm.nlu;
@@ -276,7 +305,21 @@
     const out = await stopRec();
     if (out) await query({ wav: out.wav, label: `${out.seconds.toFixed(1)} s audio` });
   });
-  $("send").addEventListener("click", () => { const t = $("text").value.trim(); if (t) query({ text: t, label: t }); });
+  $("send").addEventListener("click", () => {
+    if (busy) return;
+    const t = $("text").value.trim();
+    if (t || photo) query({ text: t, label: t || "(photo only)" });
+  });
+  function clearPhoto() { photo = null; $("photo").value = ""; $("photoPrev").style.display = "none"; }
+  $("photo").addEventListener("change", (e) => {
+    photo = e.target.files[0] || null;
+    if (!photo) return clearPhoto();
+    const pv = $("photoPrev");
+    pv.querySelector("img").src = URL.createObjectURL(photo);
+    pv.querySelector("span").textContent = `${photo.name} · ${(photo.size / 1024).toFixed(0)} KB`;
+    pv.style.display = "inline-flex";
+  });
+  $("photoClear").addEventListener("click", clearPhoto);
   $("text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("send").click(); });
   $("reset").addEventListener("click", () => { sessionId = null; logEl.innerHTML = ""; setStatus("New session. Tap to speak"); });
   if (!window.isSecureContext) setStatus("Mic needs https or localhost");

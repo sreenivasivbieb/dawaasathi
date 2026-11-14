@@ -21,6 +21,8 @@ from app.models import Alternative, Candidate, DrugItem, Flag, PriceInfo, Safety
 _DIR = Path(__file__).parent / "templates"
 MAX_WORDS = 45
 WARNING_FLAG_CODES = {"NSQ_BATCH", "POSSIBLE_BANNED", "DUPLICATE_SALT", "SYMPTOM_MISMATCH", "LOOK_ALIKE"}
+# Spoken in full whatever the word budget: the direct answer to the question / what the pack is.
+ANSWER_FLAG_PREFIXES = ("SYMPTOM_", "USE_", "SUPPLEMENT", "BRAND_NOT_IN_DATA")
 MISMATCH_CODES = {"SALT_MISMATCH", "STRENGTH_MISMATCH", "RELEASE_MISMATCH", "FORM_MISMATCH",
                   "CONCENTRATION_MISMATCH"}
 
@@ -336,9 +338,12 @@ def render(ctx: RenderContext) -> Rendered:
             fs["batch"] = f.facts.get("batch_no", "")
         kind = "fixed" if "{" not in clauses[key] else "dynamic"
         target = warn_segs if f.code in WARNING_FLAG_CODES else flag_segs
-        if f.code.startswith(("SYMPTOM_", "USE_")):
+        if f.code.startswith(ANSWER_FLAG_PREFIXES):
             target = answer_segs
         target.append(Segment(_fill(clauses[key], fs), kind))
+
+    if code == "UNVERIFIED" and any(f.code == "SUPPLEMENT" for f in ctx.flags) and not (item and item.salts):
+        segs = []  # "it is a supplement, not in our data" is the answer; "details missing" adds nothing
 
     # ---- length budget: verdict + warnings + detail + info flags + doctor <= ~MAX_WORDS
     body = list(segs) + answer_segs
