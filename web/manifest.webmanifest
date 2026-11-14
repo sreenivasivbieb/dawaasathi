@@ -1,12 +1,12 @@
 {
-  "name": "Dawaa Saathi · दवा साथी",
-  "short_name": "Dawaa Saathi",
-  "description": "Voice-first medicine checker in Indian languages",
+  "name": "Momo · AI Healthcare Receptionist",
+  "short_name": "Momo",
+  "description": "Every patient call, handled with care. Real-time healthcare receptionist and medicine companion.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f4ef",
-  "theme_color": "#0f5c4d",
+  "background_color": "#f7faf8",
+  "theme_color": "#10b981",
   "icons": [
     {"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
   ]
