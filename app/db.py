@@ -99,6 +99,9 @@ def split_brand_name(name: str) -> tuple[str, str, list[str]]:
     return base, family, rest
 
 
+LEARNED_ID_BASE = 10_000_000  # brand ids >= this came from the web lookup (var/local.db)
+
+
 @dataclass(slots=True)
 class BrandRec:
     id: int
@@ -216,6 +219,31 @@ class Store:
             st.lasa.setdefault(b, set()).add(a)
         st.datasets = {r["name"]: dict(r) for r in conn.execute("SELECT * FROM datasets")}
         return st
+
+    # ------------------------------------------------------------------ learned (web) brands
+    def add_learned(self, row: dict) -> BrandRec | None:
+        """Add a brand found by the web lookup (a learned_brands row, app/localdb.py) to the
+        in-memory store. Ids are offset so they never collide with the drug DB's own ids."""
+        salts = saltmod.parse_composition(row["composition"])
+        if not salts:
+            return None
+        bid = LEARNED_ID_BASE + int(row["id"])
+        if bid in self.brands:
+            return self.brands[bid]
+        name = row["name"]
+        form = saltmod.canonical_form(row.get("form")) or saltmod.canonical_form(name)
+        release = saltmod.canonical_release(row.get("release")) or saltmod.canonical_release(name) or "IR"
+        base, family, rest = split_brand_name(name)
+        rec = BrandRec(
+            id=bid, name=name, base=base, family=family, label_tokens=rest, salts=salts,
+            salt_key=saltmod.salt_key(salts), strength_key=saltmod.strength_key(salts, form), form=form,
+            release=release, pack_qty=row.get("pack_qty"), pack_unit=row.get("pack_unit"), mrp=row.get("mrp"),
+            manufacturer=row.get("manufacturer"), scheduled=False,
+            source=f"web: {row.get('source')} ({row.get('source_url')})", updated_at=(row.get("fetched_at") or "")[:10],
+        )
+        self.brands[bid] = rec
+        self.by_salt.setdefault(rec.salt_key, []).append(bid)
+        return rec
 
     # ------------------------------------------------------------------ helpers
     def dataset(self, name: str) -> dict | None:

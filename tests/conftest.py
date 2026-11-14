@@ -58,8 +58,9 @@ def brand_ids(store) -> dict[str, int]:
 @pytest.fixture(scope="session")
 def settings(db_path, tmp_path_factory):
     cache = tmp_path_factory.mktemp("tts")
+    local = tmp_path_factory.mktemp("local") / "local.db"
     return dataclasses.replace(
-        get_settings(), db_path=db_path, cache_dir=cache, gnani_api_key=None, groq_api_keys=(), tavily_api_key=None, expose_debug=True,
+        get_settings(), db_path=db_path, local_db_path=local, cache_dir=cache, gnani_api_key=None, groq_api_keys=(), tavily_api_key=None, expose_debug=True,
         rate_limit_per_min=10000,
     )
 
@@ -71,16 +72,18 @@ def fake_ocr() -> FakeOCR:
 
 # ---------------------------------------------------------------- API client
 @pytest.fixture
-def make_client(settings):
-    """make_client(stt=MockSTT(...)) -> a started TestClient (lifespan run, state built)."""
+def make_client(settings, tmp_path):
+    """make_client(stt=MockSTT(...)) -> a started TestClient (lifespan run, state built). Each test
+    gets its own local DB (chat history, learned brands), shared by the clients it makes."""
     from fastapi.testclient import TestClient
 
     from app.main import create_app
 
     opened = []
+    test_settings = dataclasses.replace(settings, local_db_path=tmp_path / "local.db")
 
     def _make(stt=None, tts=None, ocr=None):
-        app = create_app(settings, stt=stt or MockSTT(), tts=tts or MockTTS(), ocr=ocr or FakeOCR())
+        app = create_app(test_settings, stt=stt or MockSTT(), tts=tts or MockTTS(), ocr=ocr or FakeOCR())
         client = TestClient(app)
         client.__enter__()
         opened.append(client)

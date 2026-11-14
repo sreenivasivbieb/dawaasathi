@@ -125,6 +125,26 @@ SYMPTOMS: dict[str, set[str]] = {
 }
 
 
+def _merge_indic() -> None:
+    """Add the Bengali / Gujarati / Punjabi / Odia / Tamil / Telugu / Kannada / Malayalam words."""
+    from app.nlu import lexicon_indic as lx
+
+    for words in lx.FILLERS.values():
+        FILLERS.update(_set(words))
+    for intent, by_lang in lx.INTENTS.items():
+        for words in by_lang.values():
+            INTENT_WORDS[intent].update(_set(words))
+    _USE_PHRASES.extend(lx.USE_PHRASES)
+    YES.update(_set(lx.YES))
+    NO.update(_set(lx.NO))
+    for n, words in lx.ORDINALS.items():
+        ORDINALS[n].update(_set(words))
+    for sym, words in lx.SYMPTOMS.items():
+        SYMPTOMS[sym].update(_set(words))
+
+
+_merge_indic()
+
 _AMBIGUOUS_NUM = _set("दो एक सो ek")
 
 

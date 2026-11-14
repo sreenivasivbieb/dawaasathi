@@ -1,0 +1,13 @@
+{
+  "name": "Dawaa Saathi · दवा साथी",
+  "short_name": "Dawaa Saathi",
+  "description": "Voice-first medicine checker in Indian languages",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#0f5c4d",
+  "icons": [
+    {"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

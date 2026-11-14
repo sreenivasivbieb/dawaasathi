@@ -332,6 +332,44 @@ async def grievance_draft(request: Request, body: GrievanceBody):
     }
 
 
+# ---------------------------------------------------------------- chat history (threads)
+# There are no accounts: a thread id is a random id the server issued, kept by the client, and only
+# ids the client sends can be read. There is no "list every thread" endpoint.
+def _thread_id(thread_id: str) -> str:
+    from app.api.sessions import PUBLIC_ID
+
+    if not PUBLIC_ID.match(thread_id or ""):
+        raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
+    return thread_id
+
+
+@router.get("/v1/threads")
+async def threads(request: Request, ids: str = Query("", max_length=2000)):
+    """Summaries (title, language, message count, dates) for the thread ids the client holds."""
+    from app.api.sessions import PUBLIC_ID
+
+    wanted = [i for i in dict.fromkeys(x.strip() for x in ids.split(",")) if PUBLIC_ID.match(i)][:50]
+    return {"threads": request.app.state.local.threads(wanted)}
+
+
+@router.get("/v1/threads/{thread_id}")
+async def thread_messages(request: Request, thread_id: str, limit: int = Query(200, ge=1, le=500)):
+    tid = _thread_id(thread_id)
+    local = request.app.state.local
+    if not local.thread_exists(tid):
+        raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
+    return {"id": tid, "lang": local.thread_lang(tid), "messages": local.messages(tid, limit)}
+
+
+@router.delete("/v1/threads/{thread_id}")
+async def delete_thread(request: Request, thread_id: str):
+    tid = _thread_id(thread_id)
+    if not request.app.state.local.delete_thread(tid):
+        raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
+    request.app.state.sessions.forget(tid)  # also drop the short-term context
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------- ops
 @router.get("/healthz")
 async def healthz(request: Request):

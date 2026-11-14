@@ -27,12 +27,13 @@ SYMPTOMS = ("fever", "pain", "infection", "cold", "cough", "allergy", "diabetes"
             "cholesterol", "asthma", "diarrhoea", "vomiting", "vitamin", "heart", "skin", "eye", "inflammation")
 
 NLU_PROMPT = f"""You read one transcribed utterance from a patient in India talking to a medicine helper.
-Speech is often Hindi/Marathi/English code-mixed and the transcript may contain ASR errors.
+Speech may be in any Indian language (Hindi, Marathi, Bengali, Gujarati, Punjabi, Odia, Tamil, Telugu,
+Kannada, Malayalam) or English, often code-mixed, and the transcript may contain ASR errors.
 Extract ONLY what the speaker said. Never add a drug, strength or fact they did not say.
 
 Return JSON: {{"intent": one of {list(INTENTS)},
- "drugs": [{{"name": "drug/brand name as heard, written in Latin script (transliterate Devanagari, e.g. "
- "ऑगमेंटिन -> Augmentin)", "strength": number|null, "unit": "mg"|"mcg"|"g"|"ml"|"iu"|null,
+ "drugs": [{{"name": "drug/brand name as heard, written in Latin script (transliterate any Indian script, e.g. "
+ "ऑगमेंटिन -> Augmentin, டோலோ -> Dolo)", "strength": number|null, "unit": "mg"|"mcg"|"g"|"ml"|"iu"|null,
  "form": "tablet"|"capsule"|"syrup"|"drops"|"injection"|null, "release": "SR"|"ER"|"DR"|null}}],
  "symptom": one of {list(SYMPTOMS)} or null  (ONLY if the speaker names their own health problem,
    e.g. "बुखार के लिए"; NEVER infer it from the drug: "Glycomet 500 ka sasta" -> null),
@@ -57,7 +58,8 @@ low-literacy listener. Rules, all mandatory:
 - At most {max_words} words. End with exactly this sentence: "{doctor_line}"
 Return ONLY the spoken reply text, nothing else (no quotes, no labels, no JSON)."""
 
-LANG_NAMES = {"hi": "Hindi", "en": "Indian English", "mr": "Marathi", "ta": "Tamil", "te": "Telugu"}
+LANG_NAMES = {"hi": "Hindi", "en": "Indian English", "mr": "Marathi", "bn": "Bengali", "gu": "Gujarati",
+              "pa": "Punjabi", "or": "Odia", "ta": "Tamil", "te": "Telugu", "kn": "Kannada", "ml": "Malayalam"}
 
 
 class LLMError(Exception):

@@ -1,9 +1,26 @@
-// UI strings for hi / en / mr. Hindi-first: every label has an English sub-label
-// (shown in small type when the UI language is not English).
+// UI strings. Hindi, English and Marathi are written here; Bengali, Gujarati, Punjabi, Odia, Tamil,
+// Telugu, Kannada and Malayalam live in ./i18n/<lang>.js (labels) and ./i18n/terms.js (words shared
+// with the spoken replies, generated from the backend templates). Every label has an English
+// sub-label, shown in small type when the UI language is not English.
 // Pure data + helpers; no DOM access so it can be imported from Node for tests.
 
-export const LANGS = ["hi", "en", "mr"];
-export const SPEECH_LANG = { hi: "hi-IN", en: "en-IN", mr: "mr-IN" };
+import bn from "./i18n/bn.js";
+import gu from "./i18n/gu.js";
+import kn from "./i18n/kn.js";
+import ml from "./i18n/ml.js";
+import or from "./i18n/or.js";
+import pa from "./i18n/pa.js";
+import ta from "./i18n/ta.js";
+import te from "./i18n/te.js";
+import { TERMS } from "./i18n/terms.js";
+
+export const LANGS = ["hi", "en", "mr", "bn", "gu", "pa", "or", "ta", "te", "kn", "ml"];
+/** Each language's own name, for the language picker. */
+export const LANG_NAMES = {
+  hi: "हिंदी", en: "English", mr: "मराठी", bn: "বাংলা", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ", or: "ଓଡ଼ିଆ",
+  ta: "தமிழ்", te: "తెలుగు", kn: "ಕನ್ನಡ", ml: "മലയാളം",
+};
+export const SPEECH_LANG = Object.fromEntries(LANGS.map((l) => [l, `${l}-IN`]));
 
 const S = {
   hi: {
@@ -114,6 +131,12 @@ const S = {
     err_STT_NOT_CONFIGURED: "आवाज़ पहचान अभी चालू नहीं है। कृपया लिखकर पूछें।",
     err_NOTHING_TO_SPEAK: "सुनाने के लिए कुछ नहीं मिला।",
     err_UNKNOWN_CANDIDATE: "यह विकल्प पुराना हो गया। फिर से पूछें।",
+    consent_5: "आपकी बातचीत का लिखित रूप इतिहास के लिए सेव होता है; आप इसे कभी भी मिटा सकते हैं।",
+    err_THREAD_NOT_FOUND: "यह बातचीत नहीं मिली।",
+    history: "इतिहास", history_title: "पिछली बातचीत", history_empty: "अभी कोई बातचीत नहीं",
+    history_delete: "मिटाएँ", history_deleted: "बातचीत मिटा दी गई", history_messages: "{n} संदेश",
+    history_note: "सिर्फ़ इस डिवाइस पर शुरू की गई बातचीत यहाँ दिखती है।",
+    attached_photo: "फोटो", attached_audio: "आवाज़", web_source: "वेब से",
     shape_check: "सही का निशान",
     shape_cross: "क्रॉस का निशान",
     shape_question: "सवाल का निशान",
@@ -226,6 +249,12 @@ const S = {
     err_STT_NOT_CONFIGURED: "Voice recognition is not set up yet. Please type your question.",
     err_NOTHING_TO_SPEAK: "Nothing to play yet.",
     err_UNKNOWN_CANDIDATE: "That choice has expired. Please ask again.",
+    consent_5: "The text of your conversation is saved for your history; you can delete it any time.",
+    err_THREAD_NOT_FOUND: "This conversation was not found.",
+    history: "History", history_title: "Past conversations", history_empty: "No conversations yet",
+    history_delete: "Delete", history_deleted: "Conversation deleted", history_messages: "{n} messages",
+    history_note: "Only conversations started on this device are shown here.",
+    attached_photo: "Photo", attached_audio: "Voice", web_source: "from the web",
     shape_check: "check mark",
     shape_cross: "cross mark",
     shape_question: "question mark",
@@ -338,6 +367,12 @@ const S = {
     err_STT_NOT_CONFIGURED: "आवाज-ओळख अजून चालू नाही. कृपया लिहून विचारा.",
     err_NOTHING_TO_SPEAK: "ऐकवण्यासाठी काही मिळाले नाही.",
     err_UNKNOWN_CANDIDATE: "हा पर्याय जुना झाला. पुन्हा विचारा.",
+    consent_5: "तुमच्या संभाषणाचा मजकूर इतिहासासाठी जतन होतो; तुम्ही तो कधीही हटवू शकता.",
+    err_THREAD_NOT_FOUND: "हे संभाषण सापडले नाही.",
+    history: "इतिहास", history_title: "मागील संभाषणे", history_empty: "अजून कोणतेही संभाषण नाही",
+    history_delete: "हटवा", history_deleted: "संभाषण हटवले", history_messages: "{n} संदेश",
+    history_note: "फक्त या उपकरणावर सुरू केलेली संभाषणे इथे दिसतात.",
+    attached_photo: "फोटो", attached_audio: "आवाज", web_source: "वेबवरून",
     shape_check: "बरोबरची खूण",
     shape_cross: "फुलीची खूण",
     shape_question: "प्रश्नचिन्ह",
@@ -361,6 +396,7 @@ const VERDICT = {
     needs_confirmation: "कौन-सी दवा?",
     needs_image: "फोटो चाहिए",
     error: "जाँच नहीं हो पाई",
+    blocked: "मदद",
   },
   en: {
     BANNED_COMBINATION: "On the banned list",
@@ -377,6 +413,7 @@ const VERDICT = {
     needs_confirmation: "Which medicine?",
     needs_image: "Photo needed",
     error: "Could not check",
+    blocked: "Help",
   },
   mr: {
     BANNED_COMBINATION: "बंदी यादीत आहे",
@@ -393,6 +430,7 @@ const VERDICT = {
     needs_confirmation: "कोणते औषध?",
     needs_image: "फोटो हवा",
     error: "तपासणी होऊ शकली नाही",
+    blocked: "मदत",
   },
 };
 
@@ -411,6 +449,7 @@ const FLAGS = {
     RELEASE_MISMATCH: "प्रकार भी अलग",
     FORM_MISMATCH: "रूप भी अलग",
     CONCENTRATION_MISMATCH: "सिरप की ताकत भी अलग",
+    WEB_SOURCED: "जानकारी वेब से",
     usually: "आमतौर पर",
   },
   en: {
@@ -426,6 +465,7 @@ const FLAGS = {
     RELEASE_MISMATCH: "Release type also differs",
     FORM_MISMATCH: "Form also differs",
     CONCENTRATION_MISMATCH: "Syrup strength also differs",
+    WEB_SOURCED: "Details from the web",
     usually: "Usually for",
   },
   mr: {
@@ -441,6 +481,7 @@ const FLAGS = {
     RELEASE_MISMATCH: "प्रकारही वेगळा",
     FORM_MISMATCH: "स्वरूपही वेगळे",
     CONCENTRATION_MISMATCH: "सिरपची ताकदही वेगळी",
+    WEB_SOURCED: "माहिती वेबवरून",
     usually: "सहसा",
   },
 };
@@ -502,6 +543,19 @@ const PACK_UNITS = {
   ml: { hi: "एमएल", en: "ml", mr: "एमएल" },
 };
 
+// ------------------------------------------------------------------ other Indian languages
+const BY_LANG = { bn, gu, pa, or, ta, te, kn, ml };
+for (const [lang, mod] of Object.entries(BY_LANG)) {
+  S[lang] = mod.S;
+  VERDICT[lang] = mod.VERDICT;
+  FLAGS[lang] = mod.FLAGS;
+  const terms = TERMS[lang] || {};
+  USES[lang] = terms.USES || {};
+  for (const [table, key] of [[FORMS, "FORMS"], [RELEASES, "RELEASES"], [PACK_UNITS, "PACK_UNITS"]]) {
+    for (const [k, v] of Object.entries(terms[key] || {})) if (table[k]) table[k][lang] = v;
+  }
+}
+
 function fill(str, vars) {
   if (!vars) return str;
   return str.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined && vars[k] !== null ? String(vars[k]) : m));
@@ -537,6 +591,7 @@ export function packUnit(lang, unit, form) {
   return PACK_UNITS[u]?.[lang] ?? u;
 }
 export function symptomChips(lang) {
-  const send = SYMPTOM_SEND[lang] || SYMPTOM_SEND.hi;
+  // Other languages send the English phrase: the backend's symptom words always cover it.
+  const send = SYMPTOM_SEND[lang] || SYMPTOM_SEND.en;
   return SYMPTOM_KEYS.map((k) => ({ key: k, label: useWord(lang, k), en: lang === "en" ? "" : USES.en[k], send: send(k) }));
 }

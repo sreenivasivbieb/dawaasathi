@@ -65,8 +65,29 @@ class MatchIndex:
         self.by_dm: dict[str, list[int]] = defaultdict(list)
         self.by_skel: dict[str, list[int]] = defaultdict(list)
         self.weak_salts: set[str] = set()
+        self._by_name: dict[tuple[str, str], int] = {}
 
     # ---------------------------------------------------------------- build
+    def add_brand(self, brand_id: int) -> None:
+        """Index one brand added to the store after build() (a web-learned brand)."""
+        b = self.store.brands[brand_id]
+        keys = [(normalize(b.base), "base")]
+        if b.family != b.base:
+            keys.append((normalize(b.family), "family"))
+        for norm, kind in keys:
+            if not norm:
+                continue
+            idx = self._by_name.get((norm, kind))
+            if idx is not None:
+                if brand_id not in self.entries[idx].brand_ids:
+                    self.entries[idx].brand_ids.append(brand_id)
+            else:
+                self._add(Entry(norm, kind, [brand_id], None, dm_keys(norm), skeleton(norm), soundex(norm)))
+        for s in b.salts:
+            n = normalize(s.name)
+            if (n, "salt") not in self._by_name:
+                self._add(Entry(n, "salt", [], s.name, dm_keys(n), skeleton(n), soundex(n)))
+
     def build(self) -> "MatchIndex":
         groups: dict[tuple[str, str], set[int]] = defaultdict(set)
         for b in self.store.brands.values():
@@ -102,6 +123,7 @@ class MatchIndex:
     def _add(self, e: Entry) -> None:
         idx = len(self.entries)
         self.entries.append(e)
+        self._by_name.setdefault((e.norm, e.kind), idx)
         for t in trigrams(e.norm):
             self.tri[t].append(idx)
         for k in e.dm:

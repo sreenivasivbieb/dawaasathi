@@ -47,8 +47,9 @@ def _match_form(text: str) -> tuple[str, str]:
     t = unicodedata.normalize("NFKC", _INVISIBLE.sub("", text)).lower()
     t = unicodedata.normalize("NFD", t).replace("़", "")
     t = unicodedata.normalize("NFC", t)
-    spaced = re.sub(r"[^\wऀ-ॿ]+", " ", t).strip()
-    squashed = re.sub(r"[^a-z0-9ऀ-ॿ]+", "", t)
+    # All Indic blocks (Devanagari .. Malayalam): their vowel signs are not \w and must stay.
+    spaced = re.sub(r"[^\w\u0900-\u0d7f]+", " ", t).strip()
+    squashed = re.sub(r"[^a-z0-9\u0900-\u0d7f]+", "", t)
     return spaced, squashed
 
 
@@ -129,6 +130,45 @@ _MISUSE = _rx(
 )
 
 
+def _indic(*parts: str) -> re.Pattern:
+    """Patterns in other Indian scripts, normalised the same way as the text (_match_form)."""
+    return _rx(*(unicodedata.normalize("NFC", unicodedata.normalize("NFD", p)) for p in parts))
+
+
+# Bengali, Gujarati, Punjabi, Odia, Tamil, Telugu, Kannada, Malayalam. Kept to unambiguous phrases:
+# a missed phrase still reaches the normal medicine answer, which always ends with "ask your doctor".
+_SELF_HARM_INDIC = _indic(
+    r"আত্মহত্যা|মরতে চাই|মরে যেতে চাই|বাঁচতে চাই না",
+    r"આત્મહત્યા|મરી જવું છે|મરવું છે|જીવવું નથી",
+    r"ਖੁਦਕੁਸ਼ੀ|ਖ਼ੁਦਕੁਸ਼ੀ|ਆਤਮਹੱਤਿਆ|ਮਰਨਾ ਚਾਹੁੰਦਾ|ਮਰਨਾ ਚਾਹੁੰਦੀ",
+    r"ଆତ୍ମହତ୍ୟା|ମରିବାକୁ ଚାହେଁ|ମରିଯିବାକୁ ଚାହେଁ",
+    r"தற்கொலை|சாக வேண்டும்|சாகணும்|சாகப் போகிறேன்|உயிரை மாய்",
+    r"ఆత్మహత్య|చనిపోవాలని|చావాలని|బతకాలని లేదు",
+    r"ಆತ್ಮಹತ್ಯೆ|ಸಾಯಬೇಕು|ಸಾಯಬೇಕೆಂದು|ಬದುಕಲು ಇಷ್ಟವಿಲ್ಲ",
+    r"ആത്മഹത്യ|മരിക്കണം|ചാകണം|ജീവിക്കാൻ തോന്നുന്നില്ല",
+)
+_EMERGENCY_INDIC = _indic(
+    r"(অনেক|বেশি|সব).{0,20}(ওষুধ|ট্যাবলেট|বড়ি).{0,20}(খেয়ে ফেলেছে|খেয়ে ফেলেছি|গিলে)|বিষ খেয়ে",
+    r"(ઘણી|વધારે|બધી).{0,20}(ગોળીઓ|ગોળી|દવા).{0,20}(ખાઈ લીધી|ખાઈ ગયો|ખાઈ ગઈ|ગળી)|ઝેર (પી|ખાઈ)",
+    r"(ਬਹੁਤ|ਜ਼ਿਆਦਾ|ਸਾਰੀਆਂ).{0,20}(ਗੋਲੀਆਂ|ਦਵਾਈ).{0,20}(ਖਾ ਲਈਆਂ|ਖਾ ਲਈ|ਨਿਗਲ)|ਜ਼ਹਿਰ (ਪੀ|ਖਾ)",
+    r"(ଅନେକ|ବହୁତ|ସବୁ).{0,20}(ଔଷଧ|ଟାବଲେଟ|ବଟିକା).{0,20}(ଖାଇଦେଲା|ଖାଇଦେଇଛି|ଗିଳି)|ବିଷ (ପିଇ|ଖାଇ)",
+    r"(நிறைய|அதிக|எல்லா).{0,20}(மாத்திரை).{0,20}(சாப்பிட்டு|விழுங்கி|போட்டு)|விஷம் (குடித்|சாப்பிட்|குடிச்)",
+    r"(చాలా|ఎక్కువ|అన్ని).{0,20}(మాత్రలు|మాత్ర).{0,20}(మింగ|వేసుకున్న|తిన్న)|విషం (తాగ|తిన్న)",
+    r"(ತುಂಬಾ|ಹೆಚ್ಚು|ಎಲ್ಲಾ).{0,20}(ಮಾತ್ರೆ).{0,20}(ನುಂಗಿ|ತಿಂದ|ತೆಗೆದುಕೊಂಡ)|ವಿಷ (ಕುಡಿದ|ತಿಂದ)",
+    r"(ഒരുപാട്|കൂടുതൽ|എല്ലാ).{0,20}(ഗുളിക).{0,20}(കഴിച്ചു|വിഴുങ്ങി)|വിഷം (കുടിച്ചു|കഴിച്ചു)",
+)
+_MISUSE_INDIC = _indic(
+    r"নেশার জন্য|নেশা করতে|জাল প্রেসক্রিপশন",
+    r"નશા માટે|નશો કરવા|નકલી પ્રિસ્ક્રિપ્શન",
+    r"ਨਸ਼ੇ ਲਈ|ਨਸ਼ਾ ਕਰਨ|ਨਕਲੀ ਪਰਚੀ",
+    r"ନିଶା ପାଇଁ|ନିଶା କରିବା|ନକଲି ପ୍ରେସକ୍ରିପସନ",
+    r"போதைக்கு|போதை ஏற|போலி மருந்துச் சீட்டு",
+    r"మత్తు కోసం|మత్తు ఎక్క|నకిలీ ప్రిస్క్రిప్షన్",
+    r"ನಶೆಗಾಗಿ|ಅಮಲಿಗಾಗಿ|ನಕಲಿ ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್",
+    r"ലഹരിക്ക്|ലഹരിക്കായി|വ്യാജ കുറിപ്പടി",
+)
+
+
 @dataclass
 class QueryGuard:
     kind: str  # "ok" | "injection" | "self_harm" | "emergency" | "misuse"
@@ -143,11 +183,11 @@ def check_query(text: str | None) -> QueryGuard:
     if not text:
         return QueryGuard("ok")
     spaced, squashed = _match_form(text)
-    if _EMERGENCY.search(spaced):
+    if _EMERGENCY.search(spaced) or _EMERGENCY_INDIC.search(spaced):
         return QueryGuard("emergency")
-    if _SELF_HARM.search(spaced):
+    if _SELF_HARM.search(spaced) or _SELF_HARM_INDIC.search(spaced):
         return QueryGuard("self_harm")
-    if _MISUSE.search(spaced):
+    if _MISUSE.search(spaced) or _MISUSE_INDIC.search(spaced):
         return QueryGuard("misuse")
     if _INJECTION.search(spaced) or any(k in squashed for k in _INJECTION_SQUASHED):
         return QueryGuard("injection")
@@ -195,7 +235,7 @@ _SECRET_PATTERNS = [
     re.compile(r"(?i)\b(api[_-]?key|key|token|secret|password|authorization)\s*[=:]\s*\S+"),
 ]
 _SECRET_ENV = ("GNANI_API_KEY", "GROQ_API_KEY", "GROQ_API_KEYS", "TAVILY_API_KEY", "ANTHROPIC_API_KEY",
-               "ANTHROPIC_AUTH_TOKEN", "WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN")
+               "ANTHROPIC_AUTH_TOKEN")
 
 
 def known_secrets(settings: Any = None) -> list[str]:
@@ -242,6 +282,10 @@ def public_response(data: dict, settings: Any = None, debug: bool = False) -> di
         if web and web.get("found"):  # the reply names this source, so the client may show it
             public["web_uses"] = {"source": web.get("source"), "url": web.get("url"),
                                   "fetched_at": web.get("fetched_at")}
+        brand = (ds.get("llm") or {}).get("web_brand")
+        if brand and brand.get("found"):  # where a web-learned brand's composition came from
+            public["web_brand"] = {"brand": brand.get("brand"), "source": brand.get("source"),
+                                   "url": brand.get("url")}
         if "error" in ds:
             public["error"] = {"code": (ds["error"] or {}).get("code")}
         data["data_sources"] = public

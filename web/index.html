@@ -32,6 +32,10 @@
           <span class="iconbtn__lbl"><span data-i18n="pouch_open">घर की दवाएँ</span><span class="en" data-i18n-sub="pouch_open">Home pouch</span></span>
           <span id="pouch-count" class="count" hidden>0</span>
         </button>
+        <button id="btn-history" class="iconbtn" type="button" aria-haspopup="dialog" aria-controls="history">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5M12 8v4.5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="iconbtn__lbl"><span data-i18n="history">इतिहास</span><span class="en" data-i18n-sub="history">History</span></span>
+        </button>
         <button id="btn-new" class="iconbtn" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="iconbtn__lbl"><span data-i18n="new_chat">नई बातचीत</span><span class="en" data-i18n-sub="new_chat">New</span></span>
@@ -40,12 +44,11 @@
     </div>
 
     <div class="top__row">
-      <fieldset class="langs">
-        <legend class="vh">भाषा / Language</legend>
-        <label><input type="radio" name="lang" value="hi" checked><span lang="hi">हिंदी</span></label>
-        <label><input type="radio" name="lang" value="en"><span lang="en">English</span></label>
-        <label><input type="radio" name="lang" value="mr"><span lang="mr">मराठी</span></label>
-      </fieldset>
+      <label class="langpick">
+        <span class="vh" data-i18n="lang_label">भाषा</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 3v2M6 5c.6 3.4 2.6 6 5.5 7.5M11 5c-.6 3.6-3 6.6-6.5 8.5M12.5 21l4-10 4 10M14 17.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <select id="lang" class="langpick__select" aria-label="भाषा / Language"></select>
+      </label>
       <div class="toggles">
         <label class="switch"><input type="checkbox" id="tg-phone" role="switch"><span class="switch__track" aria-hidden="true"></span>
           <span class="switch__lbl"><span data-i18n="phone_mode">फ़ोन कॉल मोड</span><span class="en" data-i18n-sub="phone_mode">Phone mode</span></span></label>
@@ -93,6 +96,7 @@
       <button id="btn-check-photo" class="btn btn--wide" type="button" hidden><span data-i18n="check_photo">सिर्फ फोटो जाँचें</span><span class="en" data-i18n-sub="check_photo">Check photo</span></button>
     </section>
 
+    <section id="thread" class="thread" aria-label="Conversation"></section>
     <section id="result" class="result" aria-live="polite" aria-atomic="false" tabindex="-1"></section>
   </main>
 
@@ -117,13 +121,13 @@
         <li><span data-i18n="consent_2"></span><span class="en" data-i18n-sub="consent_2"></span></li>
         <li><span data-i18n="consent_3"></span><span class="en" data-i18n-sub="consent_3"></span></li>
         <li><span data-i18n="consent_4"></span><span class="en" data-i18n-sub="consent_4"></span></li>
+        <li><span data-i18n="consent_5"></span><span class="en" data-i18n-sub="consent_5"></span></li>
       </ul>
-      <fieldset class="langs langs--modal">
-        <legend class="vh">भाषा / Language</legend>
-        <label><input type="radio" name="lang2" value="hi" checked><span lang="hi">हिंदी</span></label>
-        <label><input type="radio" name="lang2" value="en"><span lang="en">English</span></label>
-        <label><input type="radio" name="lang2" value="mr"><span lang="mr">मराठी</span></label>
-      </fieldset>
+      <label class="langpick langpick--modal">
+        <span class="vh" data-i18n="lang_label">भाषा</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h9M8.5 3v2M6 5c.6 3.4 2.6 6 5.5 7.5M11 5c-.6 3.6-3 6.6-6.5 8.5M12.5 21l4-10 4 10M14 17.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <select id="lang2" class="langpick__select" aria-label="भाषा / Language"></select>
+      </label>
       <button id="consent-ok" class="btn btn--primary btn--wide" value="ok"><span data-i18n="consent_accept">समझ गया, शुरू करें</span><span class="en" data-i18n-sub="consent_accept">I understand, start</span></button>
     </form>
   </dialog>
@@ -144,6 +148,19 @@
         <input id="pouch-in" type="text" maxlength="80" data-i18n-ph="pouch_placeholder" placeholder="साल्ट का नाम, जैसे paracetamol">
         <button class="btn btn--primary" type="submit"><span data-i18n="add">जोड़ें</span></button>
       </form>
+    </div>
+  </dialog>
+
+  <dialog id="history" class="modal sheet" aria-labelledby="history-title">
+    <div class="modal__body">
+      <div class="sheet__head">
+        <h2 id="history-title"><span data-i18n="history_title">पिछली बातचीत</span><span class="en" data-i18n-sub="history_title">Past conversations</span></h2>
+        <button id="history-close" class="iconbtn" type="button" data-i18n-aria="close" aria-label="बंद करें">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <p class="small muted" data-i18n="history_note"></p>
+      <ul id="history-list" class="history-list"></ul>
     </div>
   </dialog>
 

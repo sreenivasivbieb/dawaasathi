@@ -216,7 +216,7 @@ class AudioService:
 
 
 def encode(pcm: bytes, sample_rate: int, fmt: str) -> tuple[bytes, str]:
-    """PCM s16le mono -> wav | ogg (Opus, WhatsApp-ready) via ffmpeg."""
+    """PCM s16le mono -> wav | ogg (Opus) via ffmpeg."""
     if fmt == "wav" or not shutil.which("ffmpeg"):
         import io
         import wave

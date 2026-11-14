@@ -1,4 +1,5 @@
-"""FastAPI app: one stateless-ish service (sessions live in memory for 15 minutes)."""
+"""FastAPI app. Short-term session context lives in memory (15 minutes); chat history and
+web-learned brands live in the local SQLite file (app/localdb.py)."""
 
 from __future__ import annotations
 
@@ -18,14 +19,16 @@ from app.adapters.gnani_tts import MockTTS, TimbreTTS
 from app.adapters.llm import GroqLLM
 from app.adapters.detect import PackDetector
 from app.adapters.ocr import OCRReader
-from app.api import routes, stream, whatsapp
+from app.api import routes, stream
 from app.api.routes import APIError, error_response
 from app.api.sessions import SessionStore
 from app.config import ROOT, Settings, get_settings
 from app.db import Store, connect
 from app.match.index import MatchIndex
 from app.adapters.tavily import Tavily
+from app.engine.web_brands import WebBrandLookup
 from app.engine.web_uses import WebUseLookup
+from app.localdb import LocalDB
 from app.pipeline import Pipeline
 from app.tts.cache import AudioService, SegmentCache
 
@@ -47,7 +50,8 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
         ocr = OCRReader(settings, http, detector=detector if detector.available else None)
     cache = SegmentCache(settings.cache_dir, settings.tts_voice, settings.tts_model)
     audio = AudioService(tts, cache, settings.tts_sample_rate, ttl_s=settings.session_ttl_s)
-    sessions = SessionStore(settings.session_ttl_s)
+    local = LocalDB(settings.local_db_path)
+    sessions = SessionStore(settings.session_ttl_s, history=local)
     app.state.settings = settings
     app.state.store = store
     app.state.index = index
@@ -55,6 +59,7 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
     app.state.ocr = ocr
     app.state.audio = audio
     app.state.sessions = sessions
+    app.state.local = local
     if llm is None and (settings.llm_nlu or settings.llm_reply):
         llm = GroqLLM(settings, http)
     app.state.llm = llm
@@ -63,7 +68,15 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
         web_llm = llm if llm is not None else GroqLLM(settings, http)
         web_uses = WebUseLookup(Tavily(settings.tavily_api_key, http), web_llm,
                                 settings.cache_dir.parent / "web_uses.json")
-    app.state.pipeline = pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses)
+    tavily = Tavily(settings.tavily_api_key, http)
+    web_brands = WebBrandLookup(tavily, llm if llm is not None else GroqLLM(settings, http), local, store, index)
+    # Brands learned from the web earlier are part of the DB from the start (even with the web lookup off).
+    learned = web_brands.load_learned()
+    if learned:
+        logging.getLogger("dawasaathi").info("loaded %d web-learned brands from %s", learned, settings.local_db_path)
+    app.state.pipeline = pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses,
+                                             web_brands=web_brands if settings.web_brands else None,
+                                             history=local)
     if isinstance(ocr, OCRReader) and "rapidocr" in ocr.available():
         # Load the OCR models and the salt vocabulary off the request path (~1-2 s).
         threading.Thread(target=lambda: (ocr.local.warm(), pipeline.vocab), daemon=True).start()
@@ -78,6 +91,7 @@ def create_app(settings: Settings | None = None, **overrides) -> FastAPI:
             build_state(app, settings, **overrides)
         yield
         await app.state.http.aclose()
+        app.state.local.close()
 
     app = FastAPI(title="Dawaa Saathi", version="0.1.0", lifespan=lifespan)
 
@@ -103,7 +117,6 @@ def create_app(settings: Settings | None = None, **overrides) -> FastAPI:
 
     app.include_router(routes.router)
     app.include_router(stream.router)
-    app.include_router(whatsapp.router)
 
     web = ROOT / "web"
     if web.exists():

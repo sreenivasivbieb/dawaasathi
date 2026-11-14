@@ -259,6 +259,9 @@ def _evaluate(run: list[tuple[str, float]]) -> list[tuple[int, int, float]]:
 def number_to_words(value: float, lang: str) -> str:
     if lang == "en":
         return _en_words(value)
+    if lang not in ("hi", "mr"):
+        # Other Indian languages: Timbre reads digits in the voice's language; keep them as digits.
+        return str(int(value)) if float(value).is_integer() else f"{value:g}"
     table = _MR_1_99 if lang == "mr" else _HI_1_99
     hundred = "शे" if lang == "mr" else " सौ"
     thousand = "हजार" if lang == "mr" else "हज़ार"

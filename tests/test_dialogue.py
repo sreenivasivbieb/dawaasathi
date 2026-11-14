@@ -13,7 +13,7 @@ from app.dialogue.verbalize import speakable
 from app.engine import alternatives as altmod, checks, price as pricemod, rules, safety as safetymod
 from app.models import Candidate, DrugItem, Flag, SafetyResult, SaltDose
 
-LANGS = ("hi", "en", "mr")
+from app.config import TEMPLATE_LANGS as LANGS  # every language with reply templates
 VERDICT_CODES = ("BANNED_COMBINATION", "MATCH", "GENERIC_EQUIVALENT", "SALT_MISMATCH", "STRENGTH_MISMATCH",
                  "RELEASE_MISMATCH", "FORM_MISMATCH", "CONCENTRATION_MISMATCH", "UNVERIFIED")
 FORBIDDEN = ("stop taking", "बंद कर", "fraud", "धोखा", "नकली", "fake", "बंद करा", "थांबवा")
@@ -253,7 +253,7 @@ def test_status_scripts_end_with_doctor_line(lang):
 
 def test_unknown_language_falls_back_to_english(store, brand_ids):
     ctx, _ = build_ctx(store, brand_ids, "MATCH", "en", "lookup")
-    ctx.lang = "ta"
+    ctx.lang = "xx"  # a code with no templates
     assert render(ctx).text.endswith(doctor_line("en"))
 
 

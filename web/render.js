@@ -38,13 +38,14 @@ export function saltLabel(s) {
 const saltsText = (item) =>
   (item?.salts || []).slice().sort((a, b) => a.name.localeCompare(b.name)).map(saltLabel).join(" + ");
 
-const LOCALE = { hi: "hi-IN-u-nu-latn", en: "en-IN", mr: "mr-IN-u-nu-latn" };
+// Latin digits in every script: prices and doses read the same as on the strip.
+const LOCALE = (lang) => (lang === "en" ? "en-IN" : `${lang}-IN-u-nu-latn`);
 export function fmtDate(iso, lang) {
   if (!iso) return "";
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + "T00:00:00" : iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   try {
-    return d.toLocaleDateString(LOCALE[lang] || "en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return d.toLocaleDateString(LOCALE(lang || "en"), { day: "numeric", month: "short", year: "numeric" });
   } catch { return String(iso); }
 }
 
@@ -78,7 +79,7 @@ const ICON = {
 export const icon = (name) => raw(ICON[name] || "");
 
 const WARN_FLAGS = new Set(["DUPLICATE_SALT", "SYMPTOM_MISMATCH", "LOOK_ALIKE", "NSQ_BATCH", "POSSIBLE_BANNED"]);
-const SPECIAL_STATUS = ["needs_confirmation", "needs_image", "error"];
+const SPECIAL_STATUS = ["needs_confirmation", "needs_image", "error", "blocked"];
 
 /** Which title key a response maps to (verdict code, lookup variant, or status). */
 export function titleKey(r) {

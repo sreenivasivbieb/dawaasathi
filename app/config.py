@@ -40,10 +40,20 @@ LANGS: dict[str, tuple[str, str]] = {
     "hi": ("hi-IN", "hi-IN"),
     "en": ("en-IN", "en-IN"),
     "mr": ("mr-IN", "mr-IN"),
+    "bn": ("bn-IN", "bn-IN"),
+    "gu": ("gu-IN", "gu-IN"),
+    "pa": ("pa-IN", "pa-IN"),
+    "or": ("or-IN", "or-IN"),
     "ta": ("ta-IN", "ta-IN"),
     "te": ("te-IN", "te-IN"),
+    "kn": ("kn-IN", "kn-IN"),
+    "ml": ("ml-IN", "ml-IN"),
 }
-TEMPLATE_LANGS = ("hi", "en", "mr")
+# Every UI language has reply templates (app/dialogue/templates/<lang>.json).
+TEMPLATE_LANGS = tuple(LANGS)
+# Languages whose LLM-reworded replies the pipeline can check (ANCHORS / FORBIDDEN phrases in
+# app/pipeline.py). In the others the vetted template is spoken as written.
+REWRITE_LANGS = ("hi", "en", "mr")
 
 
 @dataclass(frozen=True)
@@ -71,8 +81,11 @@ class Settings:
     llm_timeout_s: float
     tavily_api_key: str | None
     web_lookup_on: bool  # WEB_LOOKUP=1: usual use from trusted sites when our data has none
+    web_brands_on: bool  # WEB_BRANDS=1: composition of a brand the DB lacks, from pharmacy sites
+    web_brand_min_score: float  # search the web only when the DB's best name match is below this
     anthropic_model: str
     db_path: Path
+    local_db_path: Path  # chat history + web-learned brands (survives data reloads)
     cache_dir: Path
     session_ttl_s: int
     match_t1: float
@@ -83,9 +96,6 @@ class Settings:
     max_image_bytes: int
     rate_limit_per_min: int
     admin_token: str | None
-    whatsapp_token: str | None
-    whatsapp_phone_id: str | None
-    whatsapp_verify_token: str | None
     public_base_url: str | None
 
     @property
@@ -103,6 +113,10 @@ class Settings:
     @property
     def web_lookup(self) -> bool:
         return self.web_lookup_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
+
+    @property
+    def web_brands(self) -> bool:
+        return self.web_brands_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
 
     @property
     def tts_live(self) -> bool:
@@ -137,8 +151,11 @@ def get_settings() -> Settings:
         llm_timeout_s=_float("LLM_TIMEOUT_S", 6.0),
         tavily_api_key=_get("TAVILY_API_KEY"),
         web_lookup_on=(_get("WEB_LOOKUP", "1") or "1") == "1",
+        web_brands_on=(_get("WEB_BRANDS", "1") or "1") == "1",
+        web_brand_min_score=_float("WEB_BRAND_MIN_SCORE", 0.72),
         anthropic_model=_get("ANTHROPIC_OCR_MODEL", "claude-opus-5-5"),
         db_path=Path(_get("DAWA_DB_PATH", str(ROOT / "var" / "dawasaathi.db"))),
+        local_db_path=Path(_get("LOCAL_DB_PATH", str(ROOT / "var" / "local.db"))),
         expose_debug=_get("EXPOSE_DEBUG", "0") == "1",
         detector_model=Path(_get("DETECTOR_MODEL", str(ROOT / "var" / "models" / "pack_detector.onnx"))),
         cache_dir=Path(_get("DAWA_CACHE_DIR", str(ROOT / "var" / "tts_cache"))),
@@ -151,8 +168,5 @@ def get_settings() -> Settings:
         max_image_bytes=_int("MAX_IMAGE_BYTES", 10 * 1024 * 1024),
         rate_limit_per_min=_int("RATE_LIMIT_PER_MIN", 40),
         admin_token=_get("ADMIN_TOKEN"),
-        whatsapp_token=_get("WHATSAPP_TOKEN"),
-        whatsapp_phone_id=_get("WHATSAPP_PHONE_NUMBER_ID"),
-        whatsapp_verify_token=_get("WHATSAPP_VERIFY_TOKEN"),
         public_base_url=_get("PUBLIC_BASE_URL"),
     )

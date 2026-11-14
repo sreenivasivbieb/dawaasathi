@@ -441,3 +441,45 @@ body.phone.phone-text .ask { display: flex; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ------------------------------------------------------------------ language picker */
+.langpick { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 0 6px 0 12px; background: var(--surface); min-height: 44px; color: var(--brand); }
+.langpick svg { width: 20px; height: 20px; flex: none; }
+.langpick__select { border: 0; background: transparent; color: var(--text); font-size: 0.95rem; font-weight: 600;
+  min-height: 42px; padding: 0 6px; cursor: pointer; max-width: 46vw; }
+.langpick__select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+.langpick--modal { margin: 4px auto 0; }
+
+/* ------------------------------------------------------------------ conversation thread */
+.thread { display: grid; gap: 10px; margin-bottom: 12px; }
+.thread:empty { display: none; }
+.turn { display: grid; gap: 6px; }
+.bubble { max-width: 88%; padding: 10px 14px; border-radius: 16px; line-height: 1.45; overflow-wrap: anywhere; }
+.bubble--user { justify-self: end; background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 6px; }
+.bubble--bot { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+.bubble .tag { display: inline-block; font-size: 0.72rem; opacity: 0.85; margin-right: 6px; }
+.bubble--bot .tone { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.tone--green { background: var(--ok); } .tone--amber { background: var(--warn-strong); } .tone--red { background: var(--bad); }
+
+/* ------------------------------------------------------------------ history sheet */
+.history-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.history-list li { display: flex; align-items: stretch; gap: 6px; border: 1px solid var(--line); border-radius: 12px; }
+.history-list li.empty { border-style: dashed; color: var(--muted); padding: 12px 14px; }
+.history-list li.current { border-color: var(--brand); box-shadow: inset 3px 0 0 var(--brand); }
+.history-open { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 10px 12px; cursor: pointer; min-height: 52px; }
+.history-open b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-open span { font-size: 0.78rem; color: var(--muted); }
+.history-list .iconbtn { min-height: 44px; min-width: 44px; }
+
+/* ------------------------------------------------------------------ narrow phones */
+.brand { flex: 1 1 auto; }
+.brand__name, .brand__tag { overflow-wrap: normal; word-break: keep-all; }
+@media (max-width: 560px) {
+  /* A tall sticky header would cover the mic: let it scroll away on phones. */
+  .top { position: static; }
+  .top__actions { gap: 4px; }
+  .top__actions .iconbtn { min-width: 46px; min-height: 46px; padding: 4px; }
+  .top__actions .iconbtn__lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .toggles { gap: 4px 12px; }
+}

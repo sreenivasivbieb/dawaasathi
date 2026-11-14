@@ -126,10 +126,6 @@ def test_llm_rewrite_with_links_or_prompt_talk_is_unsafe():
 # ---------------------------------------------------------------- sessions
 def test_client_cannot_pick_or_open_someone_elses_session():
     store = SessionStore()
-    wa = store.get_or_create("wa_0123456789abcdef01234567", trusted=True)
-    wa.last_chemist_text = "private"
-    assert store.get(wa.id) is None  # server-side id is not reachable from the public API
-    assert store.get_or_create(wa.id).id != wa.id
     chosen = store.get_or_create("victim-session")  # a client-chosen id is never adopted
     assert chosen.id != "victim-session" and chosen.id.startswith("s_")
     assert store.get_or_create(chosen.id) is chosen  # but the id we issued resumes

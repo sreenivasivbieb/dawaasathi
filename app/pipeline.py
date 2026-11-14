@@ -1,4 +1,4 @@
-"""Request orchestration: one pipeline for REST, WebSocket, phone mode and WhatsApp.
+"""Request orchestration: one pipeline for REST, WebSocket and phone mode.
 
  1. ASR (Prisma) and OCR (strip / rx) run in parallel
  2. entities + intent from the transcript (Hindi numbers parsed)
@@ -6,6 +6,10 @@
  4. low confidence / close second / look-alike name -> spoken confirmation question
  5. banned check, rule engine, price gap, cheaper alternatives, symptom / pouch / batch checks
  6. template script -> guard -> speakable text -> TTS job (cached segments + Timbre stream)
+ 7. the turn (question + reply) is saved to the chat thread in the local DB
+
+A spoken / typed name the drug DB cannot match well is looked up on the web (app/engine/web_brands.py);
+a verified composition is saved to the local DB and the name is matched again.
 """
 
 from __future__ import annotations
@@ -29,7 +33,10 @@ from app.engine import alternatives as altmod
 from app.engine import checks, price as pricemod, rules, safety as safetymod
 from app.engine.strip_text import SaltVocab, extract_salts
 from app.guardrails import check_query, clean_input, safe_label, unsafe_reply_text
+from app.engine.web_brands import WebBrandLookup, query_name
 from app.engine.web_uses import WebUseLookup
+from app.db import LEARNED_ID_BASE
+from app.localdb import LocalDB
 from app.engine.salts import (canonical_form, canonical_release, canonical_salt, parse_composition,
                               salt_key, strength_key)
 from app.match.index import MatchIndex, MatchResult, Scored
@@ -56,9 +63,8 @@ class QueryInput:
     strip: bytes | None = None
     rx: bytes | None = None
     pouch: list[str] = field(default_factory=list)
-    channel: str = "web"  # web | phone | whatsapp | stream
+    channel: str = "web"  # web | phone | stream
     tts_sample_rate: int | None = None
-    trusted_session: bool = False  # server-side session ids (WhatsApp); never from the public API
 
 
 @dataclass
@@ -101,8 +107,11 @@ def _ents_summary(e: Entities | None) -> dict[str, Any]:
 class Pipeline:
     def __init__(self, settings: Settings, store: Store, index: MatchIndex, stt, ocr: OCRReader,
                  audio: AudioService, sessions: SessionStore, llm: GroqLLM | None = None,
-                 web_uses: WebUseLookup | None = None):
+                 web_uses: WebUseLookup | None = None, web_brands: WebBrandLookup | None = None,
+                 history: LocalDB | None = None):
         self.s = settings
+        self.web_brands = web_brands
+        self.history = history
         self.llm = llm
         self.web_uses = web_uses
         self.store = store
@@ -126,8 +135,40 @@ class Pipeline:
 
     # ================================================================== entry points
     async def query(self, inp: QueryInput) -> QueryResponse:
+        resp = await self._query(inp)
+        attachments = [k for k, v in (("audio", inp.audio), ("strip", inp.strip), ("rx", inp.rx)) if v]
+        self._record(resp, inp.lang, inp.text or resp.transcript, attachments)
+        return resp
+
+    async def confirm(self, session_id: str, candidate_id: str | None, none: bool, lang: str | None = None
+                      ) -> QueryResponse:
+        resp = await self._confirm(session_id, candidate_id, none, lang)
+        label = None
+        if none:
+            label = "—"
+        elif candidate_id:
+            label = next((c.label for c in resp.candidates if c.candidate_id == candidate_id), None) or \
+                ((resp.match or {}).get("brand"))
+        self._record(resp, resp.lang, label, [])
+        return resp
+
+    def _record(self, resp: QueryResponse, lang: str, user_text: str | None, attachments: list[str]) -> None:
+        """Save the turn to the chat thread (never the audio or photos themselves)."""
+        if self.history is None:
+            return
+        from app.guardrails import public_response
+
+        try:
+            reply = public_response(resp.model_dump(mode="json"), self.s, False)
+            if resp.status == "blocked":  # guardrail hits: keep only that it happened, not the text
+                user_text = None
+            self.history.add_turn(resp.session_id, lang, user_text, attachments, reply)
+        except Exception as exc:  # history must never break a reply
+            log_event("history_error", session=resp.session_id, error=type(exc).__name__)
+
+    async def _query(self, inp: QueryInput) -> QueryResponse:
         t_start = time.perf_counter()
-        session = self.sessions.get_or_create(inp.session_id, inp.lang, trusted=inp.trusted_session)
+        session = self.sessions.get_or_create(inp.session_id, inp.lang)
         session.lang = inp.lang
         timings: dict[str, float | None] = {"asr": None, "ocr": None, "match": None, "engine": None,
                                             "script": None, "tts_first_chunk": None}
@@ -248,7 +289,9 @@ class Pipeline:
                     channel=inp.channel, tts_sample_rate=inp.tts_sample_rate, ocr_meta=ocr_meta,
                     llm_meta=llm_meta)
 
-        # ---- voice -> brand
+        # ---- voice -> brand (the web lookup first, if the drug DB has no good match for the name)
+        if ents and ents.name_tokens and not inp.strip and not inp.rx:
+            await self._web_brand_fallback(ents, turn)
         if ents and ents.name_tokens:
             outcome = self._match_voice(ents, turn, session)
             timings["match"] = round((time.perf_counter() - t_match) * 1000, 1)
@@ -263,8 +306,8 @@ class Pipeline:
             return self._finish_simple(session, inp, "needs_image", timings, t_start, transcript=transcript)
         return await self._answer(session, turn, t_start)
 
-    async def confirm(self, session_id: str, candidate_id: str | None, none: bool, lang: str | None = None
-                      ) -> QueryResponse:
+    async def _confirm(self, session_id: str, candidate_id: str | None, none: bool, lang: str | None = None
+                       ) -> QueryResponse:
         t_start = time.perf_counter()
         session = self.sessions.get(session_id)
         timings: dict[str, float | None] = {"asr": None, "ocr": None, "match": None, "engine": None,
@@ -446,6 +489,30 @@ class Pipeline:
         if lasa is not None and all(c.key != lasa.key for c in cands):
             cands = [cands[0], lasa] + cands[1:]
         return {"kind": "voice", "candidates": cands[:3], "reason": res.reason if not lasa else "look_alike"}
+
+    async def _web_brand_fallback(self, ents: Entities, turn: Turn) -> None:
+        """Name not (well) matched by the drug DB -> find the brand's composition on the web and add it."""
+        # A bare word with no question and no strength ("hello", "acha") is chatter, not a drug name.
+        if self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
+            return
+        res = self._search_ents(ents)
+        if res.top is not None and res.top.score >= self.s.web_brand_min_score:
+            return
+        nlu = turn.llm_meta.get("nlu", {})
+        name = nlu.get("llm_text") if nlu.get("used") else None  # the LLM's Latin-script reading
+        search = query_name(extract(name).name_tokens) if name else query_name(ents.name_tokens)
+        if not search:
+            return
+        t0 = time.perf_counter()
+        found = await self.web_brands.lookup(search, ents.strength)
+        turn.timings["web_brand"] = round((time.perf_counter() - t0) * 1000, 1)
+        turn.llm_meta["web_brand"] = ({"found": False, "query": search} if found is None else
+                                      {"found": True, "query": search, "brand": found.name,
+                                       "composition": found.composition, "source": found.source,
+                                       "url": found.url})
+        METRICS.count("web_brand_found" if found else "web_brand_miss")
+        if found is not None:
+            self._vocab = None  # new salts may have arrived with the brand
 
     async def _use_flags(self, target: DrugItem, symptom: str | None, intent: str, turn: Turn) -> list[Flag]:
         """Symptom check / "what is it for?" from salts.usual_use, else from a trusted web source."""
@@ -878,6 +945,11 @@ class Pipeline:
             elif strip.brand and strip.brand_id is None and strip.salts:
                 flags.append(Flag(code="BRAND_NOT_IN_DATA", detail="printed brand not in the brand DB",
                                   facts={"printed": strip.brand}))
+        if target.brand_id is not None and target.brand_id >= LEARNED_ID_BASE:
+            b = self.store.brands[target.brand_id]
+            flags.append(Flag(code="WEB_SOURCED", detail="brand composition from a web source, not the checked DB",
+                              facts={"source": (b.source or "web").removeprefix("web: ").split(" (")[0],
+                                     "updated_at": b.updated_at}))
         for f in (
             checks.dup_salt(target, turn.pouch),
             *(await self._use_flags(target, turn.ents.get("symptom"), intent, turn)),
@@ -916,7 +988,9 @@ class Pipeline:
         # "Is it right for <symptom>?" answers are medical claims: the vetted template speaks them as is.
         # (A rewrite turned "cold is not its usual use" into "not taken in a cold", which the guard can't see.)
         symptom_answer = any(f.code.startswith(ANSWER_FLAG_PREFIXES) for f in flags)
-        if self.llm is not None and self.s.llm_reply and not symptom_answer:
+        from app.config import REWRITE_LANGS
+
+        if self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
             facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
                                                                                         "release", "mrp", "pack_qty"}),
                      "price": price.model_dump(exclude_none=True),

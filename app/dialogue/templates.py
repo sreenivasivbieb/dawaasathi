@@ -22,12 +22,12 @@ _DIR = Path(__file__).parent / "templates"
 MAX_WORDS = 45
 WARNING_FLAG_CODES = {"NSQ_BATCH", "POSSIBLE_BANNED", "DUPLICATE_SALT", "SYMPTOM_MISMATCH", "LOOK_ALIKE"}
 # Spoken in full whatever the word budget: the direct answer to the question / what the pack is.
-ANSWER_FLAG_PREFIXES = ("SYMPTOM_", "USE_", "SUPPLEMENT", "BRAND_NOT_IN_DATA")
+ANSWER_FLAG_PREFIXES = ("SYMPTOM_", "USE_", "SUPPLEMENT", "BRAND_NOT_IN_DATA", "WEB_SOURCED")
 MISMATCH_CODES = {"SALT_MISMATCH", "STRENGTH_MISMATCH", "RELEASE_MISMATCH", "FORM_MISMATCH",
                   "CONCENTRATION_MISMATCH"}
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=16)
 def load(lang: str) -> dict:
     lang = lang if lang in TEMPLATE_LANGS else "en"
     return json.loads((_DIR / f"{lang}.json").read_text(encoding="utf-8"))
@@ -132,13 +132,17 @@ def salt_names_display(item: DrugItem | None) -> str:
 def form_label(form: str | None, lang: str) -> str:
     if not form:
         return ""
-    return FORM_LABELS.get(form, {}).get(template_lang(lang), form)
+    lang = template_lang(lang)
+    label = load(lang).get("forms", {}).get(form) or FORM_LABELS.get(form, {}).get(lang)
+    return label or FORM_LABELS.get(form, {}).get("en", form.replace("_", " "))
 
 
 def release_label(rel: str | None, lang: str) -> str:
     if not rel:
         return ""
-    return RELEASE_LABELS.get(rel, {}).get(template_lang(lang), rel)
+    lang = template_lang(lang)
+    label = load(lang).get("releases", {}).get(rel) or RELEASE_LABELS.get(rel, {}).get(lang)
+    return label or RELEASE_LABELS.get(rel, {}).get("en", rel)
 
 
 def _unit_word(form: str | None, lang: str, one: bool = False) -> str:
@@ -341,6 +345,8 @@ def render(ctx: RenderContext) -> Rendered:
             fs["similar_to"] = ", ".join(f.facts.get("similar_to", [])[:2])
         elif f.code == "NSQ_BATCH":
             fs["batch"] = f.facts.get("batch_no", "")
+        elif f.code == "WEB_SOURCED":
+            fs["source"] = f.facts.get("source", "")
         kind = "fixed" if "{" not in clauses[key] else "dynamic"
         target = warn_segs if f.code in WARNING_FLAG_CODES else flag_segs
         if f.code.startswith(ANSWER_FLAG_PREFIXES):
