@@ -114,3 +114,14 @@ def test_typed_questions_keep_optional_text_helpers(make_client):
     assert result['status'] == 'ok'
     understand.assert_awaited_once()
     rewrite.assert_awaited_once()
+
+
+def test_stale_interrupt_does_not_cancel_new_reply(client, monkeypatch):
+    first = client.post('/v1/query', data={'text':'Dolo 650 price'}).json()
+    second = client.post('/v1/query', data={'text':'Dolo 650 generic','session_id':first['session_id']}).json()
+    cancelled=[]
+    monkeypatch.setattr(client.app.state.audio,'cancel',cancelled.append)
+    assert client.post('/v1/interrupt',json={'session_id':first['session_id'],'audio_id':first['audio_id']}).status_code == 200
+    assert cancelled == []
+    client.post('/v1/interrupt',json={'session_id':first['session_id'],'audio_id':second['audio_id']})
+    assert cancelled == [second['audio_id']]

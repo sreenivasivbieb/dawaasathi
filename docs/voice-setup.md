@@ -50,3 +50,53 @@ recorded-file API path for Hindi and English, not recognition accuracy for every
 Voice requests bypass optional text-model interpretation, reply rewriting and web-extraction helpers;
 Prisma transcripts pass to local matching/rules and localized templates before Timbre synthesis.
 Typed-query and explicit photo-reading helpers remain separately configurable.
+
+## Chromium capture regression (2026-11-15)
+
+A real browser capture test reproduced a worklet bug: after transferring the first Float32Array,
+its detached length became zero and the next recording buffer was allocated with zero length.
+The recorder now allocates the replacement before transfer. Playback also no longer sends an
+interrupt for a freshly generated answer; Stop targets the audio ID actually being played.
+
+`artifacts/browser-voice-check.json` records the repaired path through Chromium getUserMedia and
+the real AudioWorklet, live Prisma transcription, a Hindi reply, nonempty Timbre PCM, running
+WebAudio playback, and a correctly scoped Stop request. Capture used an injected synthetic WAV,
+so physical microphone hardware and audible speaker output remain separate checks.
+
+The transfer-detachment regression can be run without a browser:
+
+```bash
+node --test tests/web/recorder-worklet.test.mjs
+```
+
+For a configured isolated server and a synthetic question WAV, run the full browser check:
+
+```bash
+PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+DAWA_CHECK_URL=http://127.0.0.1:8004 \
+DAWA_MIC_SAMPLE=/absolute/path/to/synthetic-question.wav \
+node scripts/check_browser_voice.mjs
+```
+
+## Microphone startup diagnostics
+
+The recorder now prefers AudioWorklet and falls back to the browser's legacy ScriptProcessor
+when the worklet API is missing or its module cannot load. Microphone startup errors are shown
+in a persistent localized panel with the native error code and a retry button. Permission denial,
+missing input, device-start errors, insecure contexts and capture-engine failures have distinct
+messages. No system/browser microphone settings are changed by this fallback.
+
+`artifacts/microphone-compatibility-checks.json` records actual Chromium callback tests for both
+fallback cases, plus simulated permission/device failures and cleanup. These tests use synthetic
+devices; they do not record room audio. A separate local hardware check opened and immediately
+stopped the input stream successfully, without constructing a recorder or sending audio.
+
+```bash
+PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+DAWA_CHECK_URL=http://127.0.0.1:8004 \
+node scripts/check_microphone_compatibility.mjs
+```
+
+If the UI still cannot start capture, share the code displayed under the voice orb. In Chromium,
+check microphone permission through the site controls to the left of the address, and verify
+the selected input device in the browser/system sound settings.

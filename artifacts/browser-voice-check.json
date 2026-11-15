@@ -1,0 +1,50 @@
+{
+  "synthetic_microphone": true,
+  "physical_microphone_verified": false,
+  "live_provider": true,
+  "page_errors": [],
+  "requests": [
+    {
+      "path": "/v1/config",
+      "method": "GET"
+    },
+    {
+      "path": "/v1/threads",
+      "method": "GET"
+    },
+    {
+      "path": "/v1/query",
+      "method": "POST"
+    },
+    {
+      "path": "/v1/audio/31f091ac553540ac.pcm",
+      "method": "GET"
+    },
+    {
+      "path": "/v1/threads",
+      "method": "GET"
+    },
+    {
+      "path": "/v1/interrupt",
+      "method": "POST",
+      "body": {
+        "session_id": "s_6c7e90527fd3cb323f5abd10",
+        "audio_id": "31f091ac553540ac"
+      }
+    }
+  ],
+  "pcm_bytes": 757920,
+  "result": {
+    "status": "ok",
+    "transcript": "Dolo छह सौ पचास का दाम बताइये।",
+    "language": "hi",
+    "detected_language": "hi",
+    "tts": "timbre",
+    "audio_id": "31f091ac553540ac"
+  },
+  "playback_started": true,
+  "audio_context_state": "running",
+  "capture_batches": 171,
+  "stop_targeted_correct_audio": true,
+  "passed": true
+}

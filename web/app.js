@@ -44,6 +44,7 @@ const state = {
   cfg: null,
   busy: false,
   audio: null,
+  playingAudioId: null,
   speaking: false,
   autoSpeak: storage.get("autoSpeak", true),
   voiceConversation: false,
@@ -259,16 +260,19 @@ async function confirm(candidate, none = false) {
   }
 }
 function stopAudio() {
+  const previous = state.audio;
+  const audioId = state.playingAudioId;
   try {
     state.audio?.stop();
   } catch {
     /* Already stopped. */
   }
   state.audio = null;
+  state.playingAudioId = null;
   state.speaking = false;
   renderMic();
-  if (state.session)
-    api("/v1/interrupt", { json: { session_id: state.session } }).catch(
+  if (previous && audioId && state.session)
+    api("/v1/interrupt", { json: { session_id: state.session, audio_id: audioId } }).catch(
       () => {},
     );
 }
@@ -280,10 +284,13 @@ function playResponse(response) {
     renderMic();
   };
   const onend = () => {
+    state.audio = null;
+    state.playingAudioId = null;
     state.speaking = false;
     renderMic();
   };
   const readInBrowser = () => {
+    state.playingAudioId = null;
     state.audio = speakText(
       response.script?.speech_text || response.script?.text,
       response.lang || state.lang,
@@ -291,6 +298,7 @@ function playResponse(response) {
     );
   };
   if (response?.tts === "timbre" && response.audio_stream_url) {
+    state.playingAudioId = response.audio_id;
     state.audio = streamPcm(response.audio_stream_url, {
       onstart,
       onended: onend,
@@ -332,6 +340,12 @@ const rec = {
   ms: 0,
   timer: null,
 };
+function showMicError(error) {
+  state.micError = error;
+  $("mic-error").hidden = !error;
+  $("mic-error-message").textContent = error ? t(state.lang, error.key) : "";
+  $("mic-error-code").textContent = error?.code || "";
+}
 function renderMic() {
   const connected = state.cfg?.stt === "prisma";
   const phase = rec.on
@@ -391,11 +405,12 @@ async function toggleRecording() {
   }
   if (rec.starting || state.busy || state.cfg?.stt !== "prisma") return;
   stopAudio();
-  unlockAudio();
   const epoch = ++rec.epoch;
   rec.starting = true;
   renderMic();
   try {
+    showMicError(null);
+    unlockAudio();
     await mic.start(16000);
     if (epoch !== rec.epoch || document.hidden) {
       mic.stop();
@@ -414,7 +429,12 @@ async function toggleRecording() {
     rec.timer = setTimeout(finishRecording, 22000);
     renderMic();
   } catch (error) {
-    toast(error.name === "NotAllowedError" ? "mic_denied" : "mic_unsupported");
+    const key = error.name === "InsecureContextError" ? "mic_secure"
+      : ["NotAllowedError", "SecurityError"].includes(error.name) ? "mic_denied"
+      : ["NotFoundError", "DevicesNotFoundError"].includes(error.name) ? "mic_no_device"
+      : ["NotReadableError", "TrackStartError"].includes(error.name) ? "mic_busy"
+      : error.name === "NotSupportedError" ? "mic_unsupported" : "mic_capture_error";
+    showMicError({key, code: error.name || "CaptureError"});
   } finally {
     if (epoch === rec.epoch) rec.starting = false;
     renderMic();
@@ -598,6 +618,7 @@ function renderConnection() {
     : "";
 }
 function translate() {
+  showMicError(state.micError || null);
   if (state.toastKey) $("toast").textContent = t(state.lang, state.toastKey);
   document.documentElement.lang = state.lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
@@ -692,6 +713,7 @@ $("ask").addEventListener("submit", (event) => {
   ask();
 });
 $("mic").addEventListener("click", toggleRecording);
+$("mic-retry").addEventListener("click", toggleRecording);
 $("voice-stop").addEventListener("click", () => {
   stopAudio();
   cancelRecording();

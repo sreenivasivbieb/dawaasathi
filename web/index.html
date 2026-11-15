@@ -162,7 +162,8 @@
             <p id="mic-status" class="hint" role="status">
               Checking voice availability…
             </p>
-            <button id="voice-stop" type="button" hidden="">Stop voice</button>
+            <div id="mic-error" class="mic-error" role="alert" hidden><p id="mic-error-message"></p><code id="mic-error-code"></code><button id="mic-retry" type="button" data-i18n="mic_idle">Try microphone</button></div>
+          <button id="voice-stop" type="button" hidden="">Stop voice</button>
             <details id="voice-setup" hidden="">
               <summary data-i18n="connect_voice">Connect Gnani voice</summary>
               <p data-i18n="voice_setup">

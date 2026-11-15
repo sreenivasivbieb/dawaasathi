@@ -23,8 +23,10 @@ class DawaRecorder extends AudioWorkletProcessor {
         this.buf[this.n++] = b ? (a[i] + b[i]) * 0.5 : a[i];
         if (this.n === this.buf.length) {
           // Transfer the buffer (zero-copy) and start a fresh one.
+          // Transfer detaches the old buffer, making its length zero. Allocate first.
+          const next = new Float32Array(this.buf.length);
           this.port.postMessage(this.buf, [this.buf.buffer]);
-          this.buf = new Float32Array(this.buf.length);
+          this.buf = next;
           this.n = 0;
         }
       }

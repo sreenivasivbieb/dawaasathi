@@ -19,8 +19,9 @@ import { SPEECH_LANG } from "./i18n.js";
 // ------------------------------------------------------------------ shared AudioContext
 let ctx = null;
 export function audioContext() {
-  if (!ctx) {
+  if (!ctx || ctx.state === "closed") {
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AC) throw Object.assign(new Error("Web Audio is unavailable"), { name: "NotSupportedError" });
     ctx = new AC({ latencyHint: "interactive" });
   }
   return ctx;
@@ -376,33 +377,59 @@ export class Mic {
     return this._starting;
   }
   async _open() {
-    if (!navigator.mediaDevices?.getUserMedia || !globalThis.AudioWorkletNode) {
-      const e = new Error("unsupported"); e.name = "NotSupportedError"; throw e;
+    const fail = (name, message) => Object.assign(new Error(message), { name });
+    if (globalThis.isSecureContext === false) {
+      throw fail("InsecureContextError", "Microphone access requires localhost or HTTPS.");
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw fail("NotSupportedError", "This browser does not expose microphone capture.");
     }
     const c = audioContext();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-    });
+    if (c.state === "suspended") await c.resume();
+    let stream;
     try {
-      workletReady ||= c.audioWorklet.addModule(new URL("./recorder-worklet.js", import.meta.url).href);
-      await workletReady;
-    } catch (e) {
-      workletReady = null;
-      stream.getTracks().forEach((t) => t.stop());
-      throw e;
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      });
+    } catch (error) {
+      if (error.name !== "OverconstrainedError") throw error;
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }
-    this.src = c.createMediaStreamSource(stream);
-    this.node = new AudioWorkletNode(c, "dawa-recorder", {
-      numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { batch: 1024 },
-    });
-    this.sink = c.createGain();
-    this.sink.gain.value = 0;
-    this.src.connect(this.node);
-    this.node.connect(this.sink);
-    this.sink.connect(c.destination);
-    this.node.port.onmessage = (e) => this._batch(e.data);
     this.stream = stream;
     this.ds = new Downsampler(c.sampleRate, this.targetRate);
+    try {
+      this.src = c.createMediaStreamSource(stream);
+      if (c.audioWorklet?.addModule && globalThis.AudioWorkletNode) {
+        try {
+          workletReady ||= c.audioWorklet.addModule(new URL("./recorder-worklet.js", import.meta.url).href);
+          await workletReady;
+          this.node = new AudioWorkletNode(c, "dawa-recorder", {
+            numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { batch: 1024 },
+          });
+          this.node.port.onmessage = (e) => this._batch(e.data);
+          this.mode = "worklet";
+        } catch {
+          workletReady = null;
+        }
+      }
+      // Compatibility path for WebViews/browsers that lack or reject AudioWorklet.
+      if (!this.node) {
+        if (typeof c.createScriptProcessor !== "function") {
+          throw fail("CaptureUnavailableError", "Neither audio capture processor is available.");
+        }
+        this.node = c.createScriptProcessor(2048, 1, 1);
+        this.node.onaudioprocess = (e) => this._batch(e.inputBuffer.getChannelData(0));
+        this.mode = "compatibility";
+      }
+      this.sink = c.createGain();
+      this.sink.gain.value = 0;
+      this.src.connect(this.node);
+      this.node.connect(this.sink);
+      this.sink.connect(c.destination);
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
   }
   setTargetRate(rate) {
     if (rate === this.targetRate && this.ds) return;
@@ -410,6 +437,7 @@ export class Mic {
     if (ctx) this.ds = new Downsampler(ctx.sampleRate, rate);
   }
   _batch(f32) {
+    if (!this.stream || !this.ds) return;
     let sum = 0;
     for (let i = 0; i < f32.length; i++) sum += f32[i] * f32[i];
     const rms = Math.sqrt(sum / (f32.length || 1));
@@ -417,10 +445,17 @@ export class Mic {
     this.onframe?.(pcm, rms, (f32.length / ctx.sampleRate) * 1000);
   }
   stop() {
-    if (!this.stream) return;
-    this.stream.getTracks().forEach((t) => t.stop());
-    try { this.node.port.postMessage("stop"); this.src.disconnect(); this.node.disconnect(); this.sink.disconnect(); } catch { /* ignore */ }
+    this.stream?.getTracks().forEach((track) => track.stop());
+    if (this.node?.port) {
+      try { this.node.port.postMessage("stop"); } catch { /* Already closed. */ }
+      this.node.port.onmessage = null;
+    }
+    if (this.node) this.node.onaudioprocess = null;
+    for (const node of [this.src, this.node, this.sink]) {
+      try { node?.disconnect(); } catch { /* Already disconnected. */ }
+    }
     this.stream = this.src = this.node = this.sink = null;
+    this.mode = null;
   }
 }
 

@@ -1,0 +1,37 @@
+{
+  "synthetic_devices": true,
+  "checks": [
+    {
+      "case": "missing-worklet",
+      "mode": "compatibility",
+      "batches": 12,
+      "tracksStopped": true,
+      "passed": true
+    },
+    {
+      "case": "failed-worklet-module",
+      "mode": "compatibility",
+      "batches": 14,
+      "tracksStopped": true,
+      "passed": true
+    },
+    {
+      "case": "NotAllowedError",
+      "localized_message": "mic_denied",
+      "retry_available": true,
+      "passed": true
+    },
+    {
+      "case": "NotFoundError",
+      "localized_message": "mic_no_device",
+      "retry_available": true,
+      "passed": true
+    },
+    {
+      "case": "NotReadableError",
+      "localized_message": "mic_busy",
+      "retry_available": true,
+      "passed": true
+    }
+  ]
+}
