@@ -44,7 +44,9 @@ public account. See [Linphone's official login steps](https://www.linphone.org/e
 | --- | --- |
 | Identity / SIP address | `sip:1001@127.0.0.1` |
 | Authentication username | `1001` |
-| Domain / SIP server / proxy | `sip:127.0.0.1:5070;transport=udp` |
+| Domain | `127.0.0.1` (host only) |
+| Registrar / SIP server | `sip:127.0.0.1:5070;transport=udp` |
+| Outbound SIP proxy | `sip:127.0.0.1:5070;transport=udp;lr` |
 | Password | Read `var/telephony/sip-password` locally |
 | Transport | UDP |
 | Audio codecs | PCMU / G.711 μ-law, or PCMA / G.711 A-law |
@@ -52,6 +54,8 @@ public account. See [Linphone's official login steps](https://www.linphone.org/e
 | Media encryption | None for this loopback-only test |
 
 The PBX uses port 5070 to avoid Linphone's own default client socket on 5060.
+Set the outbound proxy explicitly: otherwise `sip:700@127.0.0.1` without a port
+can go to the client's own 5060 listener and appear as an incoming self-call.
 Select the correct microphone and speaker in Linphone's audio settings. Prefer
 headphones to reduce feedback.
 
@@ -71,8 +75,17 @@ docker logs --tail 80 dawasaathi-pbx
 
 ## Next checkpoint: Python AudioSocket
 
-After the real built-in echo call succeeds, implement and start the Python echo
-listener on `127.0.0.1:9092`. Then render the next dialplan and reload:
+The Python echo listener is implemented and unit-tested, but has not passed a
+real call. After the built-in echo call succeeds, start it in another terminal:
+
+```bash
+.venv/bin/python -m app.telephony.echo
+```
+
+It accepts at most four connections, requires a unique UUID first, validates
+frame lengths, accepts 8 kHz PCM, paces output and bounds queues/call duration.
+DTMF 0 ends the diagnostic. It logs byte counts, not audio or transcripts.
+Then render the next dialplan and reload:
 
 ```bash
 .venv/bin/python scripts/telephony/local_pbx.py prepare --stage audiosocket

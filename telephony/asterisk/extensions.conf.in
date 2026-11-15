@@ -6,5 +6,6 @@ exten => 700,1,NoOp(DawaaSaathi local __STAGE__ test)
 __CALL_BODY__
  same => n,Hangup()
 
-exten => 1001,1,Dial(PJSIP/1001,20)
- same => n,Hangup()
+; Account 1001 is also a convenient alias for the assistant. Never ring the
+; same softphone back while it is already making this test call.
+exten => 1001,1,Goto(dawa-local,700,1)

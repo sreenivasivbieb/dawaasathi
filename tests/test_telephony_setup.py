@@ -41,4 +41,5 @@ def test_sip_is_loopback_authenticated_and_has_no_pstn_route(tmp_path, monkeypat
     assert "direct_media=no" in sip
     dialplan = (tmp_path / "asterisk" / "extensions.conf").read_text()
     assert "_X" not in dialplan
-    assert "Dial(PJSIP/1001,20)" in dialplan
+    assert "Dial(PJSIP/1001" not in dialplan
+    assert "1001,1,Goto(dawa-local,700,1)" in dialplan
