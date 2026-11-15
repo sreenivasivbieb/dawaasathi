@@ -7,9 +7,18 @@
 
 ![Dawaa Saathi desktop interface with voice orb, medicine checker and conversation sidebar](docs/screenshots/desktop.png)
 
-> **Data status:** the bundled starter dataset is a development fixture. Its medicine prices,
-> price ceilings, banned-combination example and batch alert are demonstration material.
-> Replace it with sourced, reviewed data before using the results for real decisions.
+> **Data status:** the active dataset is built only from the supplied `data1` folder.
+> `DATA1_ONLY=1` blocks web facts, old web-learned brands, and startup with a legacy fixture DB.
+> The supplied banned-list PDF reports status as of 2021-11-22; it remains stale/unverified.
+> Detailed indications and batch alerts are not supplied, so those answers remain unknown.
+
+The commit comparison, repairs and live data1/voice verification are in the
+[2026-11-15 regression audit](docs/regression-audit.md).
+
+Local telephone calling is being added incrementally. See the
+[telephony setup](docs/telephony.md) and [live implementation checklist](docs/telephony-checklist.md).
+Both real echo checkpoints passed. The telephone AI bridge supports Hindi and
+English; a human spoken AI telephone exchange has not yet been verified.
 
 ## Contents
 
@@ -87,6 +96,7 @@ Capture details and reproduction: [screenshots](docs/screenshots/README.md).
 - Python **3.14+** and [uv](https://docs.astral.sh/uv/).
 - A modern browser. Microphone capture requires **localhost or HTTPS** and microphone permission.
 - `ffmpeg` for audio conversion and compressed audio downloads.
+- Poppler (`pdftotext`) for importing the supplied banned-list PDF.
 - Optional: `tesseract` as an additional local OCR fallback. RapidOCR is included in Python dependencies;
   its first use may download its OCR models.
 
@@ -118,16 +128,18 @@ TIMBRE_VOICE=Shivani
 Keys stay on the server. Never add them to frontend files or commit `.env`.
 Without speech credentials, typed queries and local OCR can still work; Gnani voice stays unavailable.
 
-### Prepare a starter database
+### Import the supplied data1 database
 
-Only create the demo database if one does not already exist:
+Place all four supplied files under `data1`, retaining its `archive` subdirectory. Then run:
 
 ```bash
-test -f var/dawasaathi.db || uv run python -m scripts.load_data --src data/seed_dev
+uv run python -m scripts.load_data --src data1
 ```
 
-The importer **rebuilds its destination database** by default. See [data loading](data/README.md)
-before replacing an existing database.
+The importer validates and builds a new database before replacing the destination. It backs up
+the previous DB and writes source hashes, coverage counts and every excluded PDF row to
+`var/dawasaathi.import.json`. It imports every active A-Z row with a parseable composition,
+without a 20,000-row cap. See [data loading](data/README.md).
 
 ### Start frontend and backend
 
@@ -168,10 +180,10 @@ interface language.
 Only these ten languages are selectable, matching the configured Gnani speech models.
 [Gnani model documentation](https://github.com/Gnani-AI-Mintlify/Gnani-Vachana#prisma-v30-multilingual-model).
 
-Voice requests bypass optional text-model understanding, reply rewriting and web-extraction helpers.
-They use the recognized transcript, local medicine records, deterministic checks and localized
-templates. This boundary also applies to confirmations and stream/phone turns. An explicitly
-attached photo can still use the configured image-reading provider; that is separate from speech.
+Voice and typed requests both use configured language understanding to recover misheard names,
+strengths and intents. Matching and medical facts stay grounded in the local database. Guarded
+reply phrasing is available for English, Hindi and Marathi. This also applies to stream/phone turns.
+An explicitly attached photo can use the configured image-reading provider.
 
 More details: [voice configuration and verification](docs/voice-setup.md).
 
@@ -194,7 +206,7 @@ Typed question / recognized speech / prescription and strip photos
                   Save history · generate reply audio
 ```
 
-The verdict engine uses structured data and code rules. Optional helpers can assist typed queries
+The verdict engine uses structured data and code rules. Optional helpers can assist text and speech
 or image reading, but their output must pass the corresponding parsing and validation checks.
 If details are incomplete, the app asks for confirmation or another photo, or reports an
 unverified result.
@@ -208,21 +220,22 @@ The app does **not** read every file under `data/` on each question. The importe
 
 | Location | Purpose |
 | --- | --- |
-| `data/seed_dev/` | Synthetic starter brands, aliases, reference prices, example alerts and metadata. |
+| `data1/` | The only active medicine sources: A-Z brands, PMBJP prices, DPCO ceilings and the historical banned PDF. |
+| `data/seed_dev/` | Synthetic test fixtures only; never imported by the default runtime or Docker build. |
 | `data/gov/` | Imported reference files. Presence here alone does not activate them. |
 | `var/dawasaathi.db` | Active imported medicine database. |
-| `var/local.db` | Persistent conversations and web-learned brand records, kept apart from the imported database. |
+| `var/data1-local.db` | Conversations for data1 mode. The old `var/local.db` is preserved separately. |
 | `var/web_uses.json` | Cache of source-backed usual-use lookups and misses. |
 | `var/tts_cache/` | Generated clause-level speech cache. |
 
 A reviewed dataset can be loaded with:
 
 ```bash
-uv run python -m scripts.load_data --src data/real
+uv run python -m scripts.load_data --src data1
 ```
 
-`data/real` is an example destination you must supply; it is not bundled. To explicitly import
-a government price-reference file alongside a chosen source directory:
+The four raw files are never modified. `data/real` and government price overrides remain legacy
+import options for explicitly configured `DATA1_ONLY=0` installations:
 
 ```bash
 uv run python -m scripts.load_data --src data/real --price-ref data/gov/price_ref.csv
@@ -233,10 +246,11 @@ and dates in the results. File formats, provenance and importer options: [data/R
 
 ### When web fallback runs
 
-Optional **typed-query** fallback searches approved pharmacy/medical domains when a brand is
+Web fallback is **disabled in data1 mode**, including loading previously learned web brands.
+In a legacy `DATA1_ONLY=0` installation, optional fallback searches approved pharmacy/medical domains when a brand is
 missing or when local usual-use information is unavailable. It requires `TAVILY_API_KEY`, the
 relevant `WEB_BRANDS` / `WEB_LOOKUP` flag, and a configured extraction helper. Flags alone do not
-enable searches. Advanced non-voice settings are documented in [.env.example](.env.example).
+enable searches. Settings are documented in [.env.example](.env.example).
 
 Accepted brand results retain their source URL and date, are saved to `var/local.db`, and are
 added to the matcher for reuse, including after a restart. Usual-use results are cached separately.
@@ -368,8 +382,8 @@ docker build -t dawasaathi .
 docker run --rm --env-file .env -p 8000:8000 dawasaathi
 ```
 
-Open **http://localhost:8000**. The default image imports the demo dataset. For a reviewed dataset
-inside the build context, pass `--build-arg DATA_DIR=data/real` when building. Persist `/app/var`
+Open **http://localhost:8000**. The default image imports only `data1`; all four raw files must be
+inside the build context. Persist `/app/var`
 if you need history and caches to survive container replacement; retain the initialized medicine
 database when mounting that directory. Run one application worker because sessions and audio jobs
 are held in process memory.

@@ -558,6 +558,21 @@ for (const [lang, mod] of Object.entries(BY_LANG)) {
 
 for (const [lang, labels] of Object.entries(INTERFACE)) Object.assign(S[lang], labels);
 for (const lang of LANGS) S[lang].err_NO_SPEECH = S[lang].no_speech;
+Object.assign(S.en, {
+  medicine_selected: "Medicine selected", you_selected: "You selected",
+  greeting_title: "Hello — how can I help?",
+  microphone: "Microphone", mic_default: "System default microphone",
+  mic_starting: "Starting microphone… allow access if your browser asks.",
+  audio_blocked: "Your browser blocked automatic sound. Press Replay or use the audio player's Play button.",
+  audio_failed: "The browser could not play the reply. Press Replay to generate fresh audio, or use the audio player below the answer.",
+});
+Object.assign(S.hi, {
+  medicine_selected: "चुनी गई दवा", you_selected: "आपने चुना",
+  greeting_title: "नमस्ते — कैसे मदद करूँ?", microphone: "माइक्रोफोन", mic_default: "सिस्टम का डिफ़ॉल्ट माइक्रोफोन",
+  mic_starting: "माइक्रोफोन शुरू हो रहा है… ब्राउज़र पूछे तो अनुमति दें।",
+  audio_blocked: "ब्राउज़र ने अपने आप आवाज़ चलाने से रोका। फिर से सुनें या ऑडियो प्लेयर का बटन दबाएँ।",
+  audio_failed: "जवाब की आवाज़ नहीं चल पाई। नई आवाज़ के लिए फिर से सुनें दबाएँ या जवाब के नीचे ऑडियो प्लेयर चलाएँ।",
+});
 
 function fill(str, vars) {
   if (!vars) return str;

@@ -185,6 +185,10 @@ def render(ctx: RenderContext) -> Rendered:
         "form": form_label(item.form if item else None, lang),
     }
 
+    if ctx.status == "greeting":
+        segs = [Segment(lines["greeting"], "fixed")]
+        return Rendered(segs, _join(segs), "", segs)
+
     if ctx.status == "error":
         key = "error_stt" if ctx.error_kind == "stt" else "error_generic"
         segs = [Segment(lines[key], "fixed")]
@@ -218,6 +222,10 @@ def render(ctx: RenderContext) -> Rendered:
     assert v is not None
     code = v.code
     safety = ctx.safety
+    known_with_unverified_ban = (code == "UNVERIFIED" and v.mode == "lookup"
+                                and item is not None and bool(item.salts)
+                                and not v.facts.get("missing") and not item.composition_uncertain
+                                and bool(v.facts.get("banned_check")))
 
     # ---- verdict sentence
     if code == "BANNED_COMBINATION":
@@ -251,7 +259,12 @@ def render(ctx: RenderContext) -> Rendered:
         # only the salt; "full details missing" would bury the answer. Banned-check doubts still speak.
         symptom_only = (code == "UNVERIFIED" and ctx.skip_detail and item is not None and bool(item.salts)
                         and not v.facts.get("banned_check") and "salts" not in v.facts.get("missing", []))
-        if symptom_only:
+        if known_with_unverified_ban:
+            # An unavailable historical safety check does not erase known composition or prices.
+            segs.append(Segment(_fill(lines["lookup_intro" if item.brand else "lookup_intro_generic"], slots),
+                                "dynamic"))
+            segs.append(Segment(verdicts["UNVERIFIED_BANNED_CHECK"], "fixed"))
+        elif symptom_only:
             segs.append(Segment(_fill(lines["lookup_intro" if item.brand else "lookup_intro_generic"], slots),
                                 "dynamic"))
         elif code == "UNVERIFIED":
@@ -359,14 +372,21 @@ def render(ctx: RenderContext) -> Rendered:
     # ---- length budget: verdict + warnings + detail + info flags + doctor <= ~MAX_WORDS
     body = list(segs) + answer_segs
     for group in (warn_segs, detail, flag_segs):
-        for s in group:
-            if _words(body + [s, doctor]) <= MAX_WORDS or not body:
+        for i, s in enumerate(group):
+            # A historical safety check must not crowd out the direct price answer. Never skip
+            # prices and speak only a dependent clause such as "that is about 2.2 times".
+            primary_price = known_with_unverified_ban and group is detail and i == 0 and ctx.intent == "PRICE_CHECK"
+            if _words(body + [s, doctor]) <= MAX_WORDS or not body or primary_price:
                 body.append(s)
+            elif group is detail:
+                break
     out = body + [doctor]
 
     # ---- Speak-to-Chemist
     cslots = dict(slots)
-    if code in chemist:
+    if known_with_unverified_ban:
+        chemist_text = _fill(chemist["GENERIC"], cslots)
+    elif code in chemist:
         chemist_text = _fill(chemist[code], cslots)
     elif code == "UNVERIFIED":
         chemist_text = _fill(chemist["UNVERIFIED"], cslots)

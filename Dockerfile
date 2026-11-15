@@ -1,13 +1,12 @@
 # Dawaa Saathi: one container, plain HTTP on $PORT. HTTPS is terminated by the host
 # (Render / Fly.io / Railway). Keys come from the host's environment, never from the image.
 #
-#   docker build -t dawasaathi .                                   # DB from data/seed_dev (DEV FIXTURE)
-#   docker build -t dawasaathi --build-arg DATA_DIR=data/real .    # DB from verified CSVs
+#   docker build -t dawasaathi .                                   # DB exclusively from data1
 #   docker run -p 8000:8000 -e GNANI_API_KEY=... -e GROQ_API_KEY=... dawasaathi
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
-ARG DATA_DIR=data/seed_dev
+ARG DATA_DIR=data1
 # Optional Kaggle "A-Z Medicine Dataset of India" CSV (path inside the build context).
 ARG AZ_CSV=
 ARG AZ_AS_OF=
@@ -25,7 +24,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DAWA_CACHE_DIR=/app/var/tts_cache
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr fonts-dejavu-core \
+ && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr fonts-dejavu-core poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -37,7 +36,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
 
-# Build the SQLite DB and the synthetic sample images at image build time.
+# Build the SQLite DB from data1 and the synthetic test images at image build time.
 RUN if [ -n "$AZ_CSV" ]; then \
       python -m scripts.load_data --src "$DATA_DIR" --az "$AZ_CSV" --az-as-of "$AZ_AS_OF" --az-limit "$AZ_LIMIT"; \
     else \

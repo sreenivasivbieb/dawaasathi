@@ -344,6 +344,26 @@ export function streamPcm(url, { onstart, onended, onerror } = {}) {
   return ctl;
 }
 
+/** Browser-native WAV playback. The playing event reflects playback, not downloaded bytes. */
+export function playNativeAudio(url, { element, onstart, onended, onerror } = {}) {
+  const player = element || new Audio();
+  let stopped = false;
+  let failed = false;
+  player.preload = "auto";
+  player.src = url;
+  player.onplaying = () => { if (!stopped) onstart?.(); };
+  player.onended = () => { if (!stopped) onended?.(); };
+  player.onpause = () => { if (!stopped) onended?.(); };
+  const fail = (error) => { if (!stopped && !failed) { failed = true; onerror?.(error); } };
+  player.onerror = () => fail(Object.assign(new Error("Audio could not be loaded"), { name: "MediaError" }));
+  const done = Promise.resolve(player.play()).catch(fail);
+  return { player, done, stop() {
+    stopped = true;
+    player.onplaying = player.onended = player.onpause = player.onerror = null;
+    player.pause();
+  }};
+}
+
 /** Fetch a whole PCM response (filler line). Returns {sr, samples, live} or null when silent/mock. */
 export async function fetchPcm(url) {
   const res = await fetch(url, { cache: "no-store" });
@@ -384,25 +404,50 @@ export class Mic {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw fail("NotSupportedError", "This browser does not expose microphone capture.");
     }
-    const c = audioContext();
-    if (c.state === "suspended") await c.resume();
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1,
+          ...(this.deviceId ? { deviceId: { exact: this.deviceId } } : {}) },
       });
     } catch (error) {
       if (error.name !== "OverconstrainedError") throw error;
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }
     this.stream = stream;
-    this.ds = new Downsampler(c.sampleRate, this.targetRate);
+    // Record using the browser's own encoder even if WebAudio is suspended or a worklet stalls.
+    // PCM processing below supplies VAD and input levels, but does not gate the actual recording.
+    this.native = null;
+    this.nativeDone = null;
+    if (globalThis.MediaRecorder) {
+      try {
+        const type = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"]
+          .find(type => MediaRecorder.isTypeSupported?.(type));
+        const recorder = this.native = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+        const chunks = [];
+        this.nativeDone = new Promise(resolve => {
+          recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+          recorder.onstop = () => resolve(chunks.length ? new Blob(chunks, { type: recorder.mimeType || type || "audio/webm" }) : null);
+          recorder.onerror = () => resolve(null);
+        });
+        recorder.start(250);
+      } catch { this.native = null; this.nativeDone = null; }
+    }
     try {
+      const c = audioContext();
+      // Do not await resume: a blocked audio output must not block microphone permission/capture.
+      if (c.state === "suspended") c.resume().catch(() => {});
+      this.ds = new Downsampler(c.sampleRate, this.targetRate);
       this.src = c.createMediaStreamSource(stream);
       if (c.audioWorklet?.addModule && globalThis.AudioWorkletNode) {
         try {
           workletReady ||= c.audioWorklet.addModule(new URL("./recorder-worklet.js", import.meta.url).href);
-          await workletReady;
+          let timer;
+          try {
+            await Promise.race([workletReady, new Promise((_, reject) => {
+              timer = setTimeout(() => reject(fail("CaptureUnavailableError", "AudioWorklet startup timed out")), 3000);
+            })]);
+          } finally { clearTimeout(timer); }
           this.node = new AudioWorkletNode(c, "dawa-recorder", {
             numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { batch: 1024 },
           });
@@ -427,9 +472,22 @@ export class Mic {
       this.node.connect(this.sink);
       this.sink.connect(c.destination);
     } catch (error) {
+      if (this.native) {
+        for (const node of [this.src, this.node, this.sink]) {
+          try { node?.disconnect(); } catch { /* Already disconnected. */ }
+        }
+        this.src = this.node = this.sink = null;
+        this.mode = "native";
+        return;
+      }
       this.stop();
       throw error;
     }
+  }
+  async finish() {
+    const done = this.nativeDone;
+    this.stop();
+    return done ? await done : null;
   }
   setTargetRate(rate) {
     if (rate === this.targetRate && this.ds) return;
@@ -445,6 +503,10 @@ export class Mic {
     this.onframe?.(pcm, rms, (f32.length / ctx.sampleRate) * 1000);
   }
   stop() {
+    if (this.native && this.native.state !== "inactive") {
+      try { this.native.stop(); } catch { /* Already stopped. */ }
+    }
+    this.native = null;
     this.stream?.getTracks().forEach((track) => track.stop());
     if (this.node?.port) {
       try { this.node.port.postMessage("stop"); } catch { /* Already closed. */ }

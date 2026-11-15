@@ -61,7 +61,7 @@ def settings(db_path, tmp_path_factory):
     local = tmp_path_factory.mktemp("local") / "local.db"
     return dataclasses.replace(
         get_settings(), db_path=db_path, local_db_path=local, cache_dir=cache, gnani_api_key=None, groq_api_keys=(), tavily_api_key=None, expose_debug=True,
-        rate_limit_per_min=10000,
+        rate_limit_per_min=10000, data1_only=False,
     )
 
 

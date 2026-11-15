@@ -1,0 +1,168 @@
+{
+  "checked_at": "2026-11-15T12:44:52.877963",
+  "base_url": "http://127.0.0.1:8004",
+  "live_providers": true,
+  "physical_microphone_verified": false,
+  "source_hashes": {
+    "archive/A_Z_medicines_dataset_of_India.csv": "f89c1cdea39c615151201f15a99082e83c1aac0cd41a742d0f0c3a511c87a2d7",
+    "Product List_13_11_2026 @ 16_32_21.csv": "4cc7caac3948cc4aa86f9706b0da6df13bcbc0b1540b389c64700f87e76237cf",
+    "dpco-2026-ceiling-prices.csv": "756032e0d5f4c480567c634376c961c204c36cedad15d918167adc7122537662",
+    "Updated Banned Drugs List.pdf": "4549bdef7cafd9c0dcd389b6624da197ac568a8682e78f6d5fb1b6f248065b07"
+  },
+  "checks": [
+    {
+      "name": "typed price from supplied A-Z and PMBJP",
+      "status": "unverified",
+      "seconds": 2.74,
+      "transcript": "Dolo 650 price",
+      "language": "en",
+      "match": {
+        "brand_id": 56512,
+        "brand": "Dolo 650 Tablet",
+        "confidence": 0.985,
+        "heard": "dolo",
+        "source": "voice"
+      },
+      "script": "Your Dolo 650 tablets have 650 milligram paracetamol each. The banned‑list check could not be done. They cost 34.27 rupees for 15 tablets, while Jan Aushadhi version is 15.47 rupees, about 2.2 times cheaper. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true
+    },
+    {
+      "name": "follow-up retains medicine, unavailable use remains unknown",
+      "status": "unverified",
+      "seconds": 0.65,
+      "transcript": "What is it used for?",
+      "language": "en",
+      "match": {
+        "brand_id": 56512,
+        "brand": "Dolo 650 Tablet",
+        "confidence": null,
+        "heard": null,
+        "source": "voice"
+      },
+      "script": "Dolo 650 contains Paracetamol 650 mg. The banned-list check could not be completed. We could not find reliable information on what this medicine is used for. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true
+    },
+    {
+      "name": "misheard name and number recovered by language understanding",
+      "status": "unverified",
+      "seconds": 2.0,
+      "transcript": "Tellmisartan Salis price",
+      "language": "en",
+      "match": {
+        "brand_id": null,
+        "brand": null,
+        "confidence": 0.965,
+        "heard": "telmisartan",
+        "source": "voice"
+      },
+      "script": "You asked about Telmisartan 40 mg. The banned-list check could not be completed. At Jan Aushadhi, 10 tablets cost 12.38 rupees. The government ceiling price is 6.92 rupees per tablet, plus GST. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true
+    },
+    {
+      "name": "larger dataset ambiguity is confirmed explicitly",
+      "status": "needs_confirmation",
+      "seconds": 0.7,
+      "transcript": "Azithral 500 price",
+      "language": "en",
+      "match": null,
+      "script": "Did you mean Azithral 500, or Azithral 500mg Injection? Say first or second. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true
+    },
+    {
+      "name": "candidate confirmation resolves the supplied product",
+      "passed": true
+    },
+    {
+      "name": "actual sample prescription and strip through configured OCR",
+      "status": "ok",
+      "seconds": 3.98,
+      "transcript": null,
+      "language": "en",
+      "match": {
+        "brand_id": 91299,
+        "brand": "Glycomet 500 SR Tablet",
+        "confidence": 1.0,
+        "heard": null,
+        "source": "strip"
+      },
+      "script": "Your doctor wrote regular (IR) tablets, but this is a sustained‑release (SR) Glycomet 500 SR Tablet. It's a different release type, not the same as prescribed. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true
+    },
+    {
+      "name": "live en STT to answer to TTS",
+      "status": "unverified",
+      "seconds": 1.67,
+      "transcript": "What is Augmentin 625 used for?",
+      "language": "en",
+      "match": {
+        "brand_id": 1,
+        "brand": "Augmentin 625 Duo Tablet",
+        "confidence": 0.96,
+        "heard": "ogmentin",
+        "source": "voice"
+      },
+      "script": "Augmentin 625 Duo contains Amoxicillin 500 mg + Clavulanic Acid 125 mg. The banned-list check could not be completed. We could not find reliable information on what this medicine is used for. Please confirm with your doctor or pharmacist.",
+      "tts": "timbre",
+      "passed": true,
+      "speech_pcm_bytes": 426240,
+      "nonzero_pcm_bytes": 396154
+    },
+    {
+      "name": "live hi STT to answer to TTS",
+      "status": "unverified",
+      "seconds": 3.12,
+      "transcript": "Dolo छह सौ पचास का दाम बताइए।",
+      "language": "hi",
+      "match": {
+        "brand_id": 56512,
+        "brand": "Dolo 650 Tablet",
+        "confidence": 0.96,
+        "heard": "dolo",
+        "source": "voice"
+      },
+      "script": "Dolo 650 में Paracetamol 650 mg है। प्रतिबंधित सूची से इसकी पक्की जाँच नहीं हो पाई। इसका दाम 15 गोलियाँ के 34.27 रुपये है, और जन औषधि में 15 गोलियाँ के 15.47 रुपये। यानी करीब 2.2 गुना। कृपया अपने डॉक्टर या फार्मासिस्ट से पुष्टि करें।",
+      "tts": "timbre",
+      "passed": true,
+      "speech_pcm_bytes": 1057920,
+      "nonzero_pcm_bytes": 902263
+    }
+  ],
+  "health": {
+    "ok": true,
+    "brands": 246003,
+    "banned_entries": 243,
+    "price_refs": 1709,
+    "stt": "prisma",
+    "tts": "timbre",
+    "ocr": "groq",
+    "sessions": 0
+  },
+  "data_sources": {
+    "brands": {
+      "as_of": null,
+      "source": "data1/archive/A_Z_medicines_dataset_of_India.csv; snapshot date not supplied",
+      "rows": 246003
+    },
+    "banned_fdc": {
+      "as_of": "2021-11-22",
+      "source": "data1/Updated Banned Drugs List.pdf; historical partial exact-combination import; legal footnotes excluded",
+      "rows": 243
+    },
+    "price_ref": {
+      "as_of": "2026-11-13",
+      "source": "data1/Product List_13_11_2026 @ 16_32_21.csv + data1/dpco-2026-ceiling-prices.csv; dates retained per row",
+      "rows": 1709
+    },
+    "nsq_alerts": {
+      "as_of": null,
+      "source": "Not supplied in data1",
+      "rows": 0
+    }
+  },
+  "passed": true
+}

@@ -96,6 +96,7 @@ class Settings:
     rate_limit_per_min: int
     admin_token: str | None
     public_base_url: str | None
+    data1_only: bool = True  # restrict medicine facts to the supplied local dataset
 
     @property
     def stt_live(self) -> bool:
@@ -111,11 +112,11 @@ class Settings:
 
     @property
     def web_lookup(self) -> bool:
-        return self.web_lookup_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
+        return not self.data1_only and self.web_lookup_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
 
     @property
     def web_brands(self) -> bool:
-        return self.web_brands_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
+        return not self.data1_only and self.web_brands_on and bool(self.tavily_api_key) and bool(self.groq_api_keys)
 
     @property
     def tts_live(self) -> bool:
@@ -125,6 +126,8 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     _load_dotenv(ROOT / ".env")
+    data1_only = _get("DATA1_ONLY", "1") != "0"
+    history_name = "data1-local.db" if data1_only else "local.db"
     return Settings(
         gnani_api_key=_get("GNANI_API_KEY"),
         gnani_base_url=_get("GNANI_BASE_URL", "https://api.vachana.ai"),
@@ -154,7 +157,7 @@ def get_settings() -> Settings:
         web_brand_min_score=_float("WEB_BRAND_MIN_SCORE", 0.72),
         anthropic_model=_get("ANTHROPIC_OCR_MODEL", "claude-opus-5-5"),
         db_path=Path(_get("DAWA_DB_PATH", str(ROOT / "var" / "dawasaathi.db"))),
-        local_db_path=Path(_get("LOCAL_DB_PATH", str(ROOT / "var" / "local.db"))),
+        local_db_path=Path(_get("LOCAL_DB_PATH", str(ROOT / "var" / history_name))),
         expose_debug=_get("EXPOSE_DEBUG", "0") == "1",
         detector_model=Path(_get("DETECTOR_MODEL", str(ROOT / "var" / "models" / "pack_detector.onnx"))),
         cache_dir=Path(_get("DAWA_CACHE_DIR", str(ROOT / "var" / "tts_cache"))),
@@ -168,4 +171,5 @@ def get_settings() -> Settings:
         rate_limit_per_min=_int("RATE_LIMIT_PER_MIN", 40),
         admin_token=_get("ADMIN_TOKEN"),
         public_base_url=_get("PUBLIC_BASE_URL"),
+        data1_only=data1_only,
     )

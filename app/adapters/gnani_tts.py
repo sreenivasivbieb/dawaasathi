@@ -20,10 +20,18 @@ _LOCK = asyncio.Lock()
 
 
 class TTSError(Exception):
-    def __init__(self, code: str, message: str, retryable: bool = False):
+    def __init__(self, code: str, message: str, retryable: bool = False, retry_after: float = 0):
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+        self.retry_after = retry_after
+
+
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0, min(5, float(resp.headers.get("retry-after", "0"))))
+    except ValueError:
+        return 0
 
 
 def tts_language(lang: str) -> str:
@@ -68,22 +76,27 @@ class TimbreTTS:
         }
 
     async def stream(self, text: str, lang: str, sample_rate: int | None = None) -> AsyncIterator[bytes]:
-        """Yield raw PCM s16le mono chunks. Retries once if nothing was produced yet."""
-        for attempt in range(2):
+        """Yield raw PCM. Retry transient/key-busy failures only before any audio was emitted."""
+        for attempt in range(3):
             produced = False
+            delay = 0.5 * 2**attempt
             try:
                 async with _LOCK:
                     async for chunk in self._sse(text, lang, sample_rate):
-                        produced = True
-                        yield chunk
+                        if chunk:
+                            produced = True
+                            yield chunk
+                if not produced:
+                    raise TTSError("EMPTY_AUDIO", "Speech provider returned no audio", True)
                 return
             except TTSError as exc:
-                if produced or not exc.retryable or attempt == 1:
+                if produced or not exc.retryable or attempt == 2:
                     raise
+                delay = max(delay, exc.retry_after)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
-                if produced or attempt == 1:
+                if produced or attempt == 2:
                     raise TTSError("NETWORK", str(exc), True) from exc
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(delay)
 
     async def _sse(self, text: str, lang: str, sample_rate: int | None) -> AsyncIterator[bytes]:
         headers = {"X-API-Key-ID": self.s.gnani_api_key or "", "Content-Type": "application/json",
@@ -94,7 +107,8 @@ class TimbreTTS:
         ) as resp:
             if resp.status_code != 200:
                 body = (await resp.aread()).decode("utf-8", "replace")[:300]
-                raise TTSError(f"HTTP_{resp.status_code}", body, resp.status_code in (429, 500, 502, 503, 504))
+                raise TTSError(f"HTTP_{resp.status_code}", body, resp.status_code in (429, 500, 502, 503, 504),
+                               _retry_after(resp))
             event = None
             first = True
             async for line in resp.aiter_lines():
@@ -126,7 +140,8 @@ class TimbreTTS:
                     return
 
     async def synthesize(self, text: str, lang: str, sample_rate: int | None = None) -> bytes:
-        for attempt in range(2):  # retry once on a connect / network error
+        for attempt in range(3):
+            delay = 0.5 * 2**attempt
             try:
                 async with _LOCK:
                     resp = await self.client.post(
@@ -134,14 +149,21 @@ class TimbreTTS:
                         headers={"X-API-Key-ID": self.s.gnani_api_key or "", "Content-Type": "application/json"},
                         json=self._body(text, lang, sample_rate), timeout=httpx.Timeout(30.0, connect=8.0),
                     )
-                break
+                if resp.status_code != 200:
+                    raise TTSError(f"HTTP_{resp.status_code}", resp.text[:300],
+                                   resp.status_code in (429, 500, 502, 503, 504), _retry_after(resp))
+                pcm = strip_wav_header(resp.content)
+                if not pcm:
+                    raise TTSError("EMPTY_AUDIO", "Speech provider returned no audio", True)
+                return pcm
+            except TTSError as exc:
+                if not exc.retryable or attempt == 2:
+                    raise
+                delay = max(delay, exc.retry_after)
             except (httpx.TimeoutException, httpx.TransportError) as exc:
-                if attempt == 1:
+                if attempt == 2:
                     raise TTSError("NETWORK", str(exc) or type(exc).__name__, True) from exc
-                await asyncio.sleep(0.5)
-        if resp.status_code != 200:
-            raise TTSError(f"HTTP_{resp.status_code}", resp.text[:300], resp.status_code >= 500)
-        return strip_wav_header(resp.content)
+            await asyncio.sleep(delay)
 
 
 class MockTTS:

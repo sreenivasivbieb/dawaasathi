@@ -17,7 +17,7 @@ def localize_response(data: dict, lang: str) -> dict:
     rx_candidates = any(c.source == "rx" for c in response.candidates)
     code = (response.data_sources.get("error") or {}).get("code", "")
     context = RenderContext(
-        lang=lang, status=response.status, intent=response.intent,
+        lang=lang, status="greeting" if response.card and response.card.title == "GREETING" else response.status, intent=response.intent,
         guard_kind=kind if response.status == "blocked" else None,
         verdict=Verdict.model_validate(response.verdict) if response.verdict else None,
         item=target, prescribed=prescribed, dispensed=dispensed,

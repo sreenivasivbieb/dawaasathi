@@ -85,6 +85,19 @@ def test_glycomet_without_release_prefers_ir_but_is_not_confident(index, store):
     assert not res.confident  # IR vs SR is ambiguous when "SR" is not said -> ask
 
 
+def test_unspoken_sr_does_not_win_due_to_printed_strength(store, brand_ids):
+    # Match the supplied A-Z representation: IR strength exists in the composition but its
+    # product name is simply "Glycomet Tablet"; SR has 500 printed in the product name.
+    ir_id = brand_ids["Glycomet 500 Tablet"]
+    sr_id = brand_ids["Glycomet SR 500 Tablet"]
+    ir = dataclasses.replace(store.brands[ir_id], name="Glycomet Tablet", label_tokens=["tablet"])
+    sr = dataclasses.replace(store.brands[sr_id], name="Glycomet 500 SR Tablet", label_tokens=["500", "sr", "tablet"])
+    sample = Store(brands={ir_id: ir, sr_id: sr})
+    result = MatchIndex(sample).build().search(["Glycomet"], strengths=[500], form="tablet")
+    assert result.top.brand_id == ir_id
+    assert not result.confident
+
+
 def test_salt_candidate_for_generic_name(index):
     _, res = search(index, "पैरासिटामोल 650")
     assert res.top.brand_id is None

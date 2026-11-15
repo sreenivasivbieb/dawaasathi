@@ -196,6 +196,24 @@ def test_price_check_lines(store, brand_ids):
     assert guard.validate(text, *sources).ok
 
 
+@pytest.mark.parametrize("lang", LANGS)
+def test_stale_banned_list_keeps_known_composition_and_primary_prices(store, brand_ids, lang):
+    from app.models import PriceInfo, Verdict
+
+    item = store.brand_item(brand_ids["Dolo 650 Tablet"])
+    safety = SafetyResult(status="unverified", banned=None, list_as_of="2021-11-22", reason="banned_list_stale")
+    ctx = RenderContext(lang=lang, status="unverified", intent="PRICE_CHECK", item=item, safety=safety,
+                        verdict=Verdict(code="UNVERIFIED", mode="lookup", facts={"banned_check": "unverified"}),
+                        price=PriceInfo(mrp=34.27, pack_qty=15, reference=15.47, reference_pack_qty=15, ratio=2.2))
+    result = render(ctx)
+    assert "650" in result.text and "Paracetamol" in result.text
+    assert "34.27" in result.text and "15.47" in result.text
+    assert load(lang)["verdict"]["UNVERIFIED_BANNED_CHECK"] in result.text
+    assert load(lang)["verdict"]["UNVERIFIED_LOOKUP"].format(brand="Dolo 650") not in result.text
+    assert "Paracetamol" in result.chemist_text
+    assert guard.validate(result.text, *guard_sources(ctx, [])).ok
+
+
 def test_release_mismatch_names_both_release_types(store, brand_ids):
     ctx, _ = build_ctx(store, brand_ids, "RELEASE_MISMATCH", "en", "compare")
     text = render(ctx).text

@@ -35,3 +35,35 @@ def test_localization_preserves_pending_confirmation(client):
 
 def test_localized_history_requires_known_thread(client):
     assert client.get("/v1/threads/s_000000000000/localized?lang=hi").status_code == 404
+
+
+def test_explicit_selection_keeps_original_transcript_and_confirmation_provenance(client):
+    pending = client.post("/v1/query", data={"text": "Glycomet", "lang": "en"}).json()
+    candidate = pending["candidates"][0]
+    selected = client.post("/v1/confirm", json={"session_id": pending["session_id"],
+        "candidate_id": candidate["candidate_id"], "lang": "en"}).json()
+    assert selected["match"]["confirmed"] is True
+    assert selected["match"]["brand"] == candidate["brand"]
+    assert selected["transcript"] == "Glycomet"
+    saved = client.get(f"/v1/threads/{pending['session_id']}/localized?lang=hi").json()["messages"][-1]["response"]
+    assert saved["match"]["confirmed"] is True
+    assert saved["transcript"] == "Glycomet"
+
+
+def test_legacy_history_marks_only_an_explicit_matching_candidate_choice():
+    from copy import deepcopy
+    from app.api.routes import _mark_confirmed_selections
+
+    messages = [
+        {"role": "assistant", "response": {"status": "needs_confirmation", "candidates": [
+            {"brand_id": 123, "brand": "Example 500mg Tablet", "label": "Example 500mg"}]}},
+        {"role": "user", "text": "Example 500mg Tablet"},
+        {"role": "assistant", "response": {"match": {"brand_id": 123, "confidence": 0.682}, "transcript": "unclear name"}},
+    ]
+    unrelated = deepcopy(messages)
+    unrelated[1]["text"] = "a different question"
+    _mark_confirmed_selections(unrelated)
+    assert "confirmed" not in unrelated[-1]["response"]["match"]
+    _mark_confirmed_selections(messages)
+    assert messages[-1]["response"]["match"]["confirmed"] is True
+    assert messages[-1]["response"]["transcript"] == "unclear name"

@@ -68,7 +68,7 @@ def test_empty_transcript_has_a_recoverable_speech_error(make_client):
 
 
 @pytest.mark.parametrize("question", ["Dolo 650 price", "Dolo 650 used for", "zzzyyyqqq 777 price", "Glycomet"])
-def test_voice_requests_bypass_optional_text_helpers(make_client, monkeypatch, question):
+def test_voice_requests_use_language_helpers_but_respect_data1_only(make_client, monkeypatch, question):
     from dataclasses import replace
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -77,7 +77,8 @@ def test_voice_requests_bypass_optional_text_helpers(make_client, monkeypatch, q
     client = make_client(stt=DetectedSTT("en-IN", question))
     pipeline = client.app.state.pipeline
     pipeline.s = replace(pipeline.s, groq_api_keys=("test-only-not-a-real-key",),
-                         llm_mode="both", tavily_api_key="test-only", web_lookup_on=True, web_brands_on=True)
+                         llm_mode="both", tavily_api_key="test-only", web_lookup_on=True, web_brands_on=True,
+                         data1_only=True)
     pipeline.llm = object()
     understand = AsyncMock(side_effect=lambda text, ents, *args: ents)
     rewrite = AsyncMock(return_value=None)
@@ -95,8 +96,43 @@ def test_voice_requests_bypass_optional_text_helpers(make_client, monkeypatch, q
         confirmed = client.post("/v1/confirm", json={"session_id": result["session_id"],
                                 "candidate_id": result["candidates"][0]["candidate_id"], "lang": "en"})
         assert confirmed.status_code == 200
-    for helper in (understand, rewrite, brand_lookup, uses_lookup):
+    understand.assert_awaited_once()
+    if question == "Dolo 650 price":
+        rewrite.assert_awaited_once()
+    for helper in (brand_lookup, uses_lookup):
         helper.assert_not_awaited()
+
+
+@pytest.mark.parametrize("channel", ["web", "stream", "phone"])
+def test_spoken_misheard_strength_recovers_through_nlu(make_client, channel):
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.adapters.llm import LLMResult
+
+    client = make_client(stt=DetectedSTT("en-IN", "Tellmisartan Salis price"))
+    pipeline = client.app.state.pipeline
+    pipeline.s = replace(pipeline.s, groq_api_keys=("test-only",), llm_mode="nlu")
+    understand = AsyncMock(return_value=LLMResult({"intent": "PRICE_CHECK", "drugs": [
+        {"name": "Telmisartan", "strength": 40, "unit": "mg", "form": "tablet", "release": None}],
+        "symptom": None}, 1.0, "test-only"))
+    pipeline.llm = SimpleNamespace(understand=understand)
+    data = {"lang": "en"}
+    if channel == "web":
+        result = client.post("/v1/query", data=data,
+                             files={"audio": ("voice.wav", tiny_wav(), "audio/wav")}).json()
+    else:
+        # Streaming transcripts have already gone through STT; keep the voice pipeline enabled.
+        import asyncio
+        from app.pipeline import QueryInput
+        result = asyncio.run(pipeline.query(QueryInput(text="Tellmisartan Salis price", lang="en",
+                                                       channel=channel))).model_dump(mode="json")
+    understand.assert_awaited_once()
+    assert result["intent"] == "PRICE_CHECK"
+    assert result["data_sources"]["llm"]["nlu"]["used"] is True
+    item = result["items"]["focus"]
+    assert item["salts"][0]["name"] == "telmisartan"
+    assert item["salts"][0]["amount"] == 40
 
 
 def test_typed_questions_keep_optional_text_helpers(make_client):

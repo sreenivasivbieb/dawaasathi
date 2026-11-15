@@ -1,7 +1,35 @@
 # Gnani speech, automatic language and chat history
 
+## Website follow-up repair (2026-11-15)
+
+The current site uses the browser's native `MediaRecorder` for the uploaded recording, with
+AudioWorklet/ScriptProcessor retained for input levels and silence detection. Microphone access
+does not wait for `AudioContext.resume()`. If Web Audio is unavailable, recording still works;
+tap the microphone again to send the question. The native recording is decoded to mono 16 kHz
+WAV on the backend. A microphone selector and input meter help identify a wrong or silent device.
+
+Reply playback uses a browser-native WAV player with visible controls, rather than assuming that
+received PCM means audible playback. Autoplay rejection is displayed. Replay of saved or expired
+audio uses `POST /v1/speak` with `which=reply` to regenerate server speech, so it does not depend
+on locally installed browser voices. `which=chemist` regenerates the saved chemist script.
+
+Enter sends a typed question; Shift+Enter inserts a newline. A bare greeting such as `hello`
+returns a greeting, without trying to match Halo/Hallo medicines.
+
+Verified: 717 Python tests, four JavaScript tests, and three real Chromium browser flows with
+Web Audio deliberately disabled: Enter-to-greeting with native playback advancing; saved-history
+Replay through server speech; and synthetic native microphone capture through live Hindi STT,
+the data1-backed answer and native TTS playback. No room audio was recorded. Evidence:
+[native browser report](../artifacts/native-browser-voice.json),
+[screenshot](../artifacts/native-browser-voice.png). Physical-device confirmation still needs the user.
+
+Hard refresh an existing tab with Ctrl+Shift+R at http://127.0.0.1:8004 to load this version.
+
+## Previous implementation and verification
+
 The UI language controls labels and typed questions. Spoken questions use automatic language
-detection: the browser posts mono 16 kHz WAV with `detect_language=true`; the backend requests
+detection: the browser uploads its native recording (or WAV fallback) with `detect_language=true`;
+the backend normalizes it to mono 16 kHz WAV and requests
 `prisma-v3.0` with `language_code=indic-auto` even if the configured legacy model is v2.5.
 The detected language controls reply templates, the session, persisted reply, and Timbre audio.
 Voice confirmations keep the detected language until the user explicitly changes the UI language.
@@ -47,9 +75,10 @@ Physical microphone capture and audible playback remain unverified. Representati
 was later verified using authorized local Chromium capture; see [screenshots](screenshots/README.md). Live-provider checks establish the
 recorded-file API path for Hindi and English, not recognition accuracy for every accent/language.
 
-Voice requests bypass optional text-model interpretation, reply rewriting and web-extraction helpers;
-Prisma transcripts pass to local matching/rules and localized templates before Timbre synthesis.
-Typed-query and explicit photo-reading helpers remain separately configurable.
+Voice and typed requests both use configured Groq language understanding, including recovery of
+misheard medicine names and strengths. Replies can use guarded phrasing in the supported languages
+before Timbre synthesis. `DATA1_ONLY=1` disables web fact lookups and loading old web-learned brands;
+all medicine facts come from the imported `data1` database. Explicit photo reading remains configurable.
 
 ## Chromium capture regression (2026-11-15)
 

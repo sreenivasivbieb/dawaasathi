@@ -2,6 +2,7 @@
   "lang": "en",
   "reviewed_by": null,
   "lines": {
+    "greeting": "Hello! Tell me a medicine name or upload a photo of the medicine strip. I can help check its ingredients and price.",
     "doctor": "Please confirm with your doctor or pharmacist.",
     "filler": "One moment, checking.",
     "error_stt": "Sorry, I could not hear that clearly. Please say the medicine name again.",

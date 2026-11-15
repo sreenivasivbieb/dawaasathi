@@ -87,6 +87,11 @@ export function titleKey(r) {
   if (SPECIAL_STATUS.includes(r.status)) return r.status;
   const code = r.verdict?.code;
   if (!code) return r.status === "unverified" ? "UNVERIFIED" : r.card?.title || "UNVERIFIED";
+  if (code === "UNVERIFIED" && r.verdict.mode === "lookup" &&
+      !r.verdict.facts?.missing?.length && r.items?.focus?.salts?.length &&
+      !r.items.focus.composition_uncertain && r.safety?.reason === "banned_list_stale") {
+    return "MATCH_lookup";
+  }
   if (r.verdict.mode === "lookup" && (code === "MATCH" || code === "GENERIC_EQUIVALENT")) return code + "_lookup";
   return code;
 }
@@ -104,7 +109,8 @@ export function targetSalts(r) {
 function head(r, lang) {
   const card = r.card || { color: "amber", icon: "question" };
   const key = titleKey(r);
-  const title = verdictTitle(lang, key);
+  const title = r.card?.title === "GREETING" ? t(lang, "greeting_title")
+    : r.match?.confirmed ? t(lang, "medicine_selected") : verdictTitle(lang, key);
   const en = "";
   const shapeName = SHAPES[card.icon] ? card.icon : "question";
   return html`<header class="card__head">
@@ -114,6 +120,11 @@ function head(r, lang) {
 }
 
 function said(r, lang) {
+  if (r.match?.confirmed) {
+    const selected = r.match.brand || saltsText(targetItem(r));
+    return html`<section class="sec said"><h3>${L(lang, "you_selected")}</h3><p class="said__selection">${selected}</p>
+      ${r.transcript ? html`<p class="small muted said__heard">${t(lang, "heard")}: “${r.transcript}”</p>` : ""}</section>`;
+  }
   if (!r.transcript) return "";
   return html`<section class="sec said"><h3>${L(lang, "you_said")}</h3><p class="said__text">“${r.transcript}”</p></section>`;
 }
@@ -299,6 +310,7 @@ function audioRow(r, lang, compact = false) {
     <button class="btn" type="button" data-act="stop-audio" aria-label="${t(lang, "stop")}">${icon("stop")}<span class="lbl">${t(lang, "stop")}</span></button>
     ${!compact && r.audio_url && r.tts === "timbre" ? html`<a class="btn btn--ghost" href="${r.audio_url}" download="dawa-saathi-reply.ogg">${icon("down")}<span class="lbl">${t(lang, "download")}</span></a>` : ""}
   </div>
+  ${r.audio_id && r.tts === "timbre" ? html`<audio id="reply-player" class="reply-player" controls playsinline preload="none" src="/v1/audio/${r.audio_id}.wav" aria-label="${t(lang, "spoken_replies")}"></audio>` : ""}
   ${!compact && r.tts !== "timbre" ? html`<p class="small muted">${t(lang, "mock_audio")}${r.audio_url ? html` · <a href="${r.audio_url}" download="dawa-saathi-reply.ogg">.ogg</a>` : ""}</p>` : ""}`;
 }
 
