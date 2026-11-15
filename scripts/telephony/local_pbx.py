@@ -37,8 +37,9 @@ def prepare(stage: str) -> None:
         (SOURCE / "pjsip.conf.in").read_text().replace("__SIP_PASSWORD__", password)
     )
     body = " same => n,Playtones(440/150)\n same => n,Wait(0.2)\n same => n,StopPlayTones()\n same => n,Echo()"
-    if stage == "audiosocket":
-        body = " same => n,Set(CALL_UUID=${UUID()})\n same => n,AudioSocket(${CALL_UUID},127.0.0.1:9092)"
+    if stage in ("audiosocket", "assistant", "demo"):
+        port = {"assistant":9093,"demo":9094,"audiosocket":9092}[stage]
+        body = f" same => n,Set(CALL_UUID=${{UUID()}})\n same => n,AudioSocket(${{CALL_UUID}},127.0.0.1:{port})"
     (config / "extensions.conf").write_text(
         (SOURCE / "extensions.conf.in").read_text()
         .replace("__STAGE__", stage).replace("__CALL_BODY__", body)
@@ -52,7 +53,7 @@ def prepare(stage: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["prepare", "build", "start", "stop", "status", "cli"])
-    parser.add_argument("--stage", choices=["echo", "audiosocket"], default="echo")
+    parser.add_argument("--stage", choices=["echo", "audiosocket", "assistant", "demo"], default="echo")
     parser.add_argument("--command", default="core show version")
     args = parser.parse_args()
     if args.action == "prepare":

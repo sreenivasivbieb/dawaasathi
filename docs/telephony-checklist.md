@@ -1,7 +1,24 @@
 # Local telephony implementation checklist
 
-Status: built-in Asterisk echo passed by user confirmation; Python AudioSocket
-echo is running and awaiting real-call verification. Spoken AI Q&A is pending.
+Status: built-in Asterisk and Python AudioSocket echo both passed by user
+confirmation. AI bridge implemented for Hindi and English; spoken AI Q&A is pending.
+
+## Current requested video-demo scope
+
+- [x] Prepare the demonstration of “What is the alternate of Dolo 650?”
+- [x] Verify the alternative against the existing data1-backed query.
+- [x] Test greeting -> caller question -> reply -> hangup.
+- [x] Prepare Hindi/English audio and start demo listener on 9094.
+- [x] Switch extension 700 to demo mode.
+- [ ] Verify the actual demo call with the user.
+
+Demo-call verification and general AI-call acceptance are tracked separately.
+
+Demo validation: **752 Python tests passed**. A full TCP playback probe received
+330080 PCM bytes, verified the complete greeting and answer, and observed clean
+hangup. Corrected a receive-idle timeout that could truncate playback when caller
+audio stops. Extension 700 now routes to `127.0.0.1:9094`. Real user-call
+verification remains pending.
 
 ## Integration plan (written before implementation)
 
@@ -56,16 +73,17 @@ opening is needed for a same-laptop test.
 - [x] Test fragmented/coalesced messages, malformed payloads and disconnections.
 - [x] Test independent simultaneous calls and duplicate UUID rejection.
 - [x] Configure a unique UUID per call and switch 700 to the Python echo service.
-- [ ] **REAL CALL GATE 2:** hear speech echoed through Python and verify cleanup.
+- [x] **REAL CALL GATE 2:** hear speech echoed through Python and verify cleanup.
 
 ## Phase 4: AI bridge (after both real call gates)
 
-- [ ] Reuse existing backend over HTTP with independent per-call session IDs.
-- [ ] Segment caller speech with bounded utterances and silence handling.
-- [ ] Validate audio conversion and paced 8 kHz response streaming.
-- [ ] Add greeting, follow-up, invalid-name handling and localized recovery prompts.
-- [ ] Add bounded call/idle/provider timeouts and feasible caller interruption.
-- [ ] Test Gnani request contracts and Hindi/Marathi/English context flow.
+- [x] Reuse existing backend over HTTP with independent per-call session IDs.
+- [x] Segment caller speech with bounded utterances and silence handling.
+- [x] Validate audio conversion and paced 8 kHz response streaming (automated).
+- [x] Add greeting, follow-up, existing invalid-name handling and localized recovery prompts.
+- [x] Add bounded call/idle/provider timeouts and caller interruption (automated).
+- [x] Test Gnani contracts and Hindi/English context flow; calls limited to these languages per latest user instruction.
+- [x] Start the AI listener on 9093 and route extension 700 to it.
 - [ ] **REAL CALL GATE 3:** complete a spoken question-and-answer exchange in Linphone.
 - [ ] Explicitly report actual languages tested and any untested languages.
 
@@ -79,6 +97,32 @@ opening is needed for a same-laptop test.
 - [ ] Final checks and honest validation status; no paid trunk implemented.
 
 ## Evidence log
+
+- Final current automated run: **748 Python tests passed**; `git diff --check`
+  passed. Live synthetic Hindi/English probes and an actual TCP AudioSocket
+  greeting probe returned real Timbre PCM. The latter received a non-silent
+  greeting frame and logged cleanup; it was not a human SIP conversation.
+- Restarted the backend with the fixed prompt endpoint and the AI listener with
+  Hindi/English-only controls. Added progress cues while waiting for TTS's first
+  chunk. Extension 700 now routes to the AI listener at **127.0.0.1:9093**.
+  The Python echo diagnostic remains available on 9092 for rollback. Final spoken
+  question-and-answer acceptance is still pending user confirmation.
+
+- User confirmed Python echo with "yes echo". Log shows UUID
+  `daada8a0-6dec-4bd2-a3eb-bba3fa3465be`, 118720 received / 115840 sent PCM bytes
+  and cleanup at hangup. Both real echo gates are passed.
+- Implemented AI bridge: existing backend over HTTP, independent call sessions,
+  energy VAD, 700 ms trailing silence, 20-second utterances, 16 kHz STT WAV,
+  paced 8 kHz TTS, greeting, idle/retry/goodbye prompts, progress tones,
+  interruption, DTMF choices and 180-second call cap.
+- Live synthetic-speech probes passed English and Hindi: real Gnani STT, existing
+  Dolo 650 lookup, 8 kHz Timbre PCM and same-session follow-up. An earlier Marathi
+  probe also passed before scope was narrowed; Marathi is excluded from calls.
+  Evidence: ignored `var/telephony/live-provider-check.json`. This is not proof of
+  a human spoken SIP question-and-answer exchange.
+- Latest user scope: telephone supports **Hindi and English only**. DTMF 7 locks
+  Hindi, 8 locks English. Other automatically detected languages produce a language
+  selection prompt. Existing website/backend general language support is retained.
 
 - Real call gate 1 passed: user reports hearing echo in Linphone. Started Python
   diagnostic listener on `127.0.0.1:9092`, passed a synthetic UUID/PCM echo probe,

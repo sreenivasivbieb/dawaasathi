@@ -17,8 +17,8 @@ The commit comparison, repairs and live data1/voice verification are in the
 
 Local telephone calling is being added incrementally. See the
 [telephony setup](docs/telephony.md) and [live implementation checklist](docs/telephony-checklist.md).
-The first checkpoint is a Linphone-to-Asterisk echo call; a spoken AI telephone
-exchange has not yet been verified.
+Both real echo checkpoints passed. The telephone AI bridge supports Hindi and
+English; a human spoken AI telephone exchange has not yet been verified.
 
 ## Contents
 

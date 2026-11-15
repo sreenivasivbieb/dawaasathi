@@ -25,6 +25,7 @@ class Call:
 
 
 class EchoServer:
+    mode = "echo"
     def __init__(self, max_calls: int = 4, idle_timeout: float = 10, call_timeout: float = 180):
         self.max_calls = max_calls
         self.idle_timeout = idle_timeout
@@ -50,7 +51,7 @@ class EchoServer:
                     raise ProtocolError("empty or duplicate call UUID")
                 call = Call(ident)
                 self.calls[ident] = call
-                LOG.info("call_started uuid=%s mode=echo", ident)
+                LOG.info("call_started uuid=%s mode=%s", ident, self.mode)
                 await self.exchange(call, reader, writer)
         except (ProtocolError, TimeoutError, ConnectionError, OSError) as exc:
             LOG.warning("call_closed reason=%s", type(exc).__name__)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from typing import Literal
 from collections import defaultdict, deque
 
 from fastapi import APIRouter, File, Form, Header, Query, Request, UploadFile
@@ -183,6 +184,23 @@ async def speak(request: Request, body: SpeakBody):
 class InterruptBody(BaseModel):
     session_id: str
     audio_id: str | None = None
+
+
+class PhonePromptBody(BaseModel):
+    lang: Literal["hi", "en"] = "hi"
+    purpose: Literal["wait", "retry", "idle", "goodbye", "language"]
+
+
+@router.post("/v1/phone/prompt")
+async def phone_prompt(request: Request, body: PhonePromptBody):
+    """Speak a fixed call-control prompt through the shared TTS queue/cache."""
+    from app.telephony.prompts import PROMPTS
+
+    rate_limit(request)
+    text = PROMPTS[body.lang][body.purpose]
+    job = request.app.state.audio.create(body.lang, [speakable(text, body.lang)], 8000)
+    return {"audio_id": job.id, "audio_stream_url": f"/v1/audio/{job.id}.pcm",
+            "tts": "timbre" if job.live else "mock", "lang": body.lang}
 
 
 @router.post("/v1/interrupt")
