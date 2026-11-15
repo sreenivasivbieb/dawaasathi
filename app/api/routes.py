@@ -156,6 +156,7 @@ async def speak(request: Request, body: SpeakBody):
         raise APIError(404, "NOTHING_TO_SPEAK", "No chemist script for this session.")
     lang = _lang(body.lang) if body.lang else session.lang
     job = request.app.state.audio.create(lang, [speakable(session.last_chemist_text, lang)])
+    session.current_audio_id = job.id
     return {"audio_id": job.id, "audio_stream_url": f"/v1/audio/{job.id}.pcm",
             "audio_url": f"/v1/audio/{job.id}.ogg", "tts": "timbre" if job.live else "mock",
             "text": session.last_chemist_text}
@@ -163,13 +164,14 @@ async def speak(request: Request, body: SpeakBody):
 
 class InterruptBody(BaseModel):
     session_id: str
+    audio_id: str | None = None
 
 
 @router.post("/v1/interrupt")
 async def interrupt(request: Request, body: InterruptBody):
     """REST barge-in: stop generating the current reply audio for this session."""
     session = request.app.state.sessions.get(body.session_id)
-    if session and session.current_audio_id:
+    if session and session.current_audio_id and (body.audio_id is None or body.audio_id == session.current_audio_id):
         request.app.state.audio.cancel(session.current_audio_id)
         METRICS.count("barge_in")
     return {"ok": True}

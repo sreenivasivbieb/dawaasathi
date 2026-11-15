@@ -1457,3 +1457,5 @@ html:not([lang="en"]) .hero-kicker {
     grid-template-columns: 1fr;
   }
 }
+.mic-error { width:100%; padding:12px; margin:8px 0; border:1px solid #e4c6b7; border-radius:10px; background:#fff6ed; color:#7c4430; text-align:left; }
+.mic-error p { font-size:.78rem; margin:0 0 8px; }.mic-error code { display:block; font-size:.68rem; overflow-wrap:anywhere; }.mic-error button { margin-top:10px; font-size:.75rem; }

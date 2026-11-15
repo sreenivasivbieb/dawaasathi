@@ -348,6 +348,10 @@ Evidence is separated by what was actually exercised:
 - [Live spoken-language checks](artifacts/live-spoken-language-checks.json): synthesized Hindi
   and English recordings passed through live Gnani STT, then produced matching-language text
   and nonempty Timbre audio. This does not establish microphone capture or accent accuracy.
+- [Chromium voice regression](artifacts/browser-voice-check.json): real browser capture with an
+  injected synthetic recording, continuous worklet batches, live recognition, matching-language
+  audio, automatic WebAudio playback startup and Stop handling. Physical microphone and audible
+  output are separate checks.
 - [Voice-control checks](artifacts/voice-language-checks.json): simulated capture, language routing,
   automatic playback control, quiet submission, cancellation and sidebar presence.
 - [UI-language checks](artifacts/ui-language-checks.json): interface language switching and saved-answer rendering.
