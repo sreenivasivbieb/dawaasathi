@@ -149,8 +149,26 @@ class SpeakBody(BaseModel):
 
 @router.post("/v1/speak")
 async def speak(request: Request, body: SpeakBody):
-    """On-demand audio for the Speak-to-Chemist script of the session's last reply."""
+    """On-demand speech for the last saved reply or the chemist script."""
     rate_limit(request)
+    if body.which in ("reply", "chemist"):
+        from app.localization import localize_response
+
+        tid = _thread_id(body.session_id)
+        messages = request.app.state.local.messages(tid, 2)
+        saved = next((m.get("response") for m in reversed(messages) if m.get("response")), None)
+        if not saved:
+            raise APIError(404, "NOTHING_TO_SPEAK", "No saved reply for this conversation.")
+        lang = _lang(body.lang or saved.get("lang"))
+        reply = localize_response(saved, lang) if lang != saved.get("lang") else saved
+        text = (reply.get("script") or {}).get("chemist_text" if body.which == "chemist" else "text")
+        if not text:
+            raise APIError(404, "NOTHING_TO_SPEAK", "No saved reply for this conversation.")
+        session = request.app.state.sessions.get_or_create(tid, lang)
+        job = request.app.state.audio.create(lang, [speakable(text, lang)])
+        session.current_audio_id = job.id
+        return {"audio_id": job.id, "audio_stream_url": f"/v1/audio/{job.id}.pcm",
+                "audio_url": f"/v1/audio/{job.id}.wav", "tts": "timbre" if job.live else "mock", "text": text}
     session = request.app.state.sessions.get(body.session_id)
     if session is None or body.which != "chemist" or not session.last_chemist_text:
         raise APIError(404, "NOTHING_TO_SPEAK", "No chemist script for this session.")
@@ -238,6 +256,8 @@ async def filler(request: Request, lang: str = "hi", sr: int | None = None):
     text = speakable(load_templates(lang)["lines"]["filler"], lang)
     job = request.app.state.audio.create(lang, [text], sr)
     await job.task
+    if job.error:
+        raise APIError(503, "TTS_UNAVAILABLE", "Speech is temporarily unavailable. Please try again.")
     return Response(job.pcm(), media_type="application/octet-stream",
                     headers={"X-Sample-Rate": str(job.sample_rate), "Cache-Control": "no-store",
                              "X-TTS": "timbre" if job.live else "mock"})
@@ -250,6 +270,9 @@ async def audio_file(request: Request, audio_file: str):
     if job is None:
         raise APIError(404, "AUDIO_NOT_FOUND", "Audio expired or unknown id.")
     if ext == "pcm":
+        await job.wait_ready()
+        if job.done and job.error and job.error != "cancelled":
+            raise APIError(503, "TTS_UNAVAILABLE", "Speech is temporarily unavailable. Please try again.")
         return StreamingResponse(job.iter_pcm(), media_type="application/octet-stream",
                                  headers={"X-Sample-Rate": str(job.sample_rate), "Cache-Control": "no-store",
                                           "X-TTS": "timbre" if job.live else "mock"})
@@ -261,6 +284,8 @@ async def audio_file(request: Request, audio_file: str):
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
     data, mime = await asyncio.to_thread(encode, job.pcm(), job.sample_rate, ext)
+    if job.error and job.error != "cancelled":
+        raise APIError(503, "TTS_UNAVAILABLE", "Speech is temporarily unavailable. Please try again.")
     return Response(data, media_type=mime, headers={"Cache-Control": "no-store"})
 
 
@@ -350,6 +375,22 @@ def _thread_id(thread_id: str) -> str:
     return thread_id
 
 
+def _mark_confirmed_selections(messages: list[dict]) -> None:
+    """Recover selection provenance in older saved turns without rewriting their stored facts."""
+    for i in range(2, len(messages)):
+        response = messages[i].get("response") or {}
+        match = response.get("match")
+        previous = messages[i - 2].get("response") or {}
+        choice = messages[i - 1]
+        if not match or match.get("confirmed") or choice.get("role") != "user" or previous.get("status") != "needs_confirmation":
+            continue
+        if match.get("brand_id") is None:
+            continue
+        if any(c.get("brand_id") == match["brand_id"] and choice.get("text") in (c.get("brand"), c.get("label"))
+               for c in previous.get("candidates", [])):
+            match["confirmed"] = True
+
+
 @router.get("/v1/threads")
 async def threads(request: Request, ids: str = Query("", max_length=2000)):
     """Summaries (title, language, message count, dates) for the thread ids the client holds."""
@@ -366,6 +407,7 @@ async def thread_messages(request: Request, thread_id: str, limit: int = Query(2
     if not local.thread_exists(tid):
         raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
     messages = local.messages(tid, limit)
+    _mark_confirmed_selections(messages)
     for message in messages:
         if message.get("response"):
             message["response"] = public_response(message["response"], request.app.state.settings, False)
@@ -382,6 +424,7 @@ async def localized_thread(request: Request, thread_id: str, lang: str = Query("
     if not local.thread_exists(tid):
         raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
     messages = local.messages(tid)
+    _mark_confirmed_selections(messages)
     for message in messages:
         if message.get("response"):
             response = localize_response(message["response"], _lang(lang))

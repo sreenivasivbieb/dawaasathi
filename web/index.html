@@ -162,8 +162,13 @@
             <p id="mic-status" class="hint" role="status">
               Checking voice availability…
             </p>
+            <div class="mic-settings">
+              <label class="mic-device-label" for="mic-device" data-i18n="microphone">Microphone</label>
+              <select id="mic-device" aria-label="Microphone"><option value="" data-i18n="mic_default">System default microphone</option></select>
+              <meter id="mic-level" min="0" max="1" value="0" aria-label="Microphone input level" hidden></meter>
+            </div>
             <div id="mic-error" class="mic-error" role="alert" hidden><p id="mic-error-message"></p><code id="mic-error-code"></code><button id="mic-retry" type="button" data-i18n="mic_idle">Try microphone</button></div>
-          <button id="voice-stop" type="button" hidden="">Stop voice</button>
+            <button id="voice-stop" type="button" hidden="">Stop voice</button>
             <details id="voice-setup" hidden="">
               <summary data-i18n="connect_voice">Connect Gnani voice</summary>
               <p data-i18n="voice_setup">
@@ -189,6 +194,7 @@
               Prisma <span data-i18n="voice_listens"></span> · Timbre
               <span data-i18n="voice_speaks"></span>
             </div>
+            <p id="audio-error" class="mic-error" role="alert" hidden></p>
           </section>
           <section
             class="composer panel"

@@ -43,7 +43,7 @@ class SegmentCache:
     def get(self, key: str) -> bytes | None:
         p = self._path(key)
         if p.exists():
-            return p.read_bytes()
+            return p.read_bytes() or None
         return None
 
     def put(self, key: str, pcm: bytes) -> None:
@@ -114,14 +114,14 @@ class AudioJob:
         gap = bytes(int(self.sample_rate * GAP_MS / 1000) * 2)
         failed = None
         try:
-            for i, text in enumerate(self.segments):
-                if i:
-                    await self._push(gap, t0)
+            for text in self.segments:
                 key = cache.key(self.lang, text, self.sample_rate)
                 cached = cache.get(key) if self.live else None
                 if cached is not None:
                     self.cache_hits += 1
                     METRICS.count("tts_cache_hit")
+                    if self.chunks:
+                        await self._push(gap, t0)
                     await self._push(_fade(cached, self.sample_rate), t0)
                     continue
                 self.cache_misses += 1
@@ -131,6 +131,8 @@ class AudioJob:
                     first = True
                     async for chunk in tts.stream(text, self.lang, self.sample_rate):
                         if first:
+                            if self.chunks:
+                                await self._push(gap, t0)
                             chunk = _fade(chunk, self.sample_rate, fade_out=False)
                             first = False
                         buf.extend(chunk)
@@ -138,7 +140,11 @@ class AudioJob:
                 except Exception as exc:  # fall back to whatever is cached; text card still shows
                     failed = f"{type(exc).__name__}: {exc}"[:200]
                     METRICS.count("tts_error")
-                    continue
+                    break
+                if not buf:
+                    failed = "empty_speech_audio"
+                    METRICS.count("tts_error")
+                    break
                 if self.live and buf:
                     cache.put(key, bytes(buf))
         except asyncio.CancelledError:
@@ -158,7 +164,15 @@ class AudioJob:
                 yield c
             sent += len(new)
             if finished and sent >= len(self.chunks):
+                if self.error and self.error != "cancelled":
+                    raise RuntimeError("Speech audio unavailable")
                 return
+
+    async def wait_ready(self) -> None:
+        """Wait for actual speech or a failure before the HTTP route sends a success header."""
+        async with self._cond:
+            while not self.chunks and not self.done:
+                await self._cond.wait()
 
     def pcm(self) -> bytes:
         return b"".join(self.chunks)

@@ -39,6 +39,8 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
     conn = connect(settings.db_path)
     store = Store.load(conn)
     conn.close()
+    if settings.data1_only and not store.dataset("data1"):
+        raise RuntimeError("DATA1_ONLY requires the data1 database. Run: python -m scripts.load_data --src data1")
     index = MatchIndex(store).build()
     http = httpx.AsyncClient(limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
     if stt is None:
@@ -70,8 +72,8 @@ def build_state(app: FastAPI, settings: Settings, stt=None, tts=None, ocr=None, 
                                 settings.cache_dir.parent / "web_uses.json")
     tavily = Tavily(settings.tavily_api_key, http)
     web_brands = WebBrandLookup(tavily, llm if llm is not None else GroqLLM(settings, http), local, store, index)
-    # Brands learned from the web earlier are part of the DB from the start (even with the web lookup off).
-    learned = web_brands.load_learned()
+    # Legacy mode can reuse learned web brands; data1-only mode must never load them.
+    learned = 0 if settings.data1_only else web_brands.load_learned()
     if learned:
         logging.getLogger("dawasaathi").info("loaded %d web-learned brands from %s", learned, settings.local_db_path)
     app.state.pipeline = pipeline = Pipeline(settings, store, index, stt, ocr, audio, sessions, llm, web_uses,

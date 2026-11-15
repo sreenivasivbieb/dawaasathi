@@ -1,6 +1,8 @@
-"""Build the SQLite database from CSV files (see data/README.md for the formats).
+"""Build the SQLite database from data1 (default) or explicit legacy CSV formats.
 
-  uv run python -m scripts.load_data --src data/seed_dev
+  uv run python -m scripts.load_data --src data1
+  # Test fixtures only, for a DATA1_ONLY=0 test configuration:
+  uv run python -m scripts.load_data --src data/seed_dev --db /tmp/dawa-test.db
   uv run python -m scripts.load_data --src data/real --az data/raw/A_Z_medicine_dataset_of_India.csv \
       --az-as-of 2026-11-01 --az-limit 20000
 
@@ -171,7 +173,7 @@ def load_banned(conn: sqlite3.Connection, rows: list[dict]) -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--src", type=Path, default=ROOT / "data" / "seed_dev")
+    ap.add_argument("--src", type=Path, default=ROOT / "data1")
     ap.add_argument("--db", type=Path, default=None)
     ap.add_argument("--az", type=Path, default=None, help="A-Z Medicine Dataset of India CSV")
     ap.add_argument("--az-as-of", default=None)
@@ -183,6 +185,13 @@ def main() -> None:
     args = ap.parse_args()
 
     db = args.db or get_settings().db_path
+    if args.src.name == "data1" or (args.src / "archive" / "A_Z_medicines_dataset_of_India.csv").exists():
+        if args.keep or args.az or args.price_ref or args.az_limit or args.az_as_of:
+            ap.error("data1 is imported as a complete dataset; do not combine it with append/override options")
+        from scripts.import_data1 import build_database
+
+        print(json.dumps(build_database(args.src, db), indent=2))
+        return
     if db.exists() and not args.keep:
         db.unlink()
     conn = connect(db)

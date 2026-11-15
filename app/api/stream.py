@@ -94,6 +94,8 @@ async def stream(ws: WebSocket):
             app.state.audio.cancel(job.id)
         except Exception:
             interrupted = True
+            await send_json({"type": "error", "code": "TTS_UNAVAILABLE",
+                             "message": "Speech is unavailable. Please read the answer or try again."})
         finally:
             state["playing"] = False
             await send_json({"type": "audio_end", "audio_id": job.id, "interrupted": interrupted})

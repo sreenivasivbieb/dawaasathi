@@ -255,12 +255,22 @@ class Pipeline:
         strip_res = None if isinstance(strip_r, BaseException) else strip_r
         rx_res = None if isinstance(rx_r, BaseException) else rx_r
 
+        greeting = re.sub(r"[\s!?.,।]+", " ", transcript or "").strip().casefold()
+        if not inp.strip and not inp.rx and greeting in {
+            "hello", "hello there", "hi", "hi there", "hey", "hey there", "namaste", "namaskar",
+            "good morning", "good afternoon", "good evening", "नमस्ते", "नमस्कार", "हैलो", "हेलो",
+            "வணக்கம்", "నమస్కారం", "ನಮಸ್ಕಾರ", "നമസ്കാരം", "নমস্কার", "નમસ્તે", "ਸਤ ਸ੍ਰੀ ਅਕਾਲ",
+        }:
+            session.pending = None
+            return self._finish_simple(session, inp, "ok", timings, t_start, transcript=transcript,
+                                       greeting=True)
+
         ents = extract(transcript) if transcript else None
         llm_meta: dict[str, Any] = {}
         if asr_meta:
             llm_meta["asr"] = asr_meta
         voice_request = bool(inp.audio) or inp.channel in ("stream", "phone")
-        if transcript and not voice_request and not session.pending and self.llm is not None and self.s.llm_nlu:
+        if transcript and not session.pending and self.llm is not None and self.s.llm_nlu:
             ents = await self._llm_understand(transcript, ents, inp.lang, timings, llm_meta)
         if transcript:
             session.last_transcript = transcript
@@ -514,7 +524,7 @@ class Pipeline:
     async def _web_brand_fallback(self, ents: Entities, turn: Turn) -> None:
         """Name not (well) matched by the drug DB -> find the brand's composition on the web and add it."""
         # A bare word with no question and no strength ("hello", "acha") is chatter, not a drug name.
-        if turn.voice_request or self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
+        if self.s.data1_only or self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
             return
         res = self._search_ents(ents)
         if res.top is not None and res.top.score >= self.s.web_brand_min_score:
@@ -541,7 +551,7 @@ class Pipeline:
             return []
         uses = checks.usual_uses(self.store, target)
         web = None
-        if uses is None and not turn.voice_request and self.web_uses is not None and self.s.web_lookup:
+        if uses is None and self.web_uses is not None and self.s.web_lookup:
             found = await self.web_uses.lookup(target)
             turn.llm_meta["web_uses"] = ({"found": False} if found is None else
                                          {"found": True, "uses": found.uses, "source": found.source,
@@ -1016,7 +1026,7 @@ class Pipeline:
         symptom_answer = any(f.code.startswith(ANSWER_FLAG_PREFIXES) for f in flags)
         from app.config import REWRITE_LANGS
 
-        if not turn.voice_request and self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
+        if self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
             facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
                                                                                         "release", "mrp", "pack_qty"}),
                      "price": price.model_dump(exclude_none=True),
@@ -1035,12 +1045,14 @@ class Pipeline:
     # ================================================================== response
     def _finish_simple(self, session: Session, inp: QueryInput, status: str, timings: dict, t_start: float,
                        transcript: str | None = None, error_kind: str | None = None,
-                       error_code: str | None = None) -> QueryResponse:
+                       error_code: str | None = None, greeting: bool = False) -> QueryResponse:
         turn = Turn(lang=inp.lang, transcript=transcript, ents={"intent": "CLARIFY"}, strip_item=None,
                     rx_items=[], voice_item=None, chosen_rx=None, pouch=inp.pouch, timings=timings,
                     channel=inp.channel, tts_sample_rate=inp.tts_sample_rate)
-        ctx = RenderContext(lang=inp.lang, status=status, error_kind=error_kind)
+        ctx = RenderContext(lang=inp.lang, status="greeting" if greeting else status, error_kind=error_kind)
         resp = self._respond(session, turn, ctx, status=status, t_start=t_start)
+        if greeting:
+            resp.card = Card(color="green", icon="question", title="GREETING")
         if error_code:
             resp.data_sources["error"] = {"code": error_code}
         return resp
@@ -1119,6 +1131,8 @@ class Pipeline:
             match = {"brand_id": it.brand_id, "brand": it.brand,
                      "confidence": (turn.match_info or {}).get("confidence", it.confidence),
                      "heard": (turn.match_info or {}).get("heard"), "source": it.source}
+            if (turn.match_info or {}).get("source") == "voice_confirmed":
+                match["confirmed"] = True
         resp = QueryResponse(
             session_id=session.id, status=status, transcript=turn.transcript, lang=ctx.lang,
             intent=turn.ents.get("intent"), mode=verdict.mode if verdict else None, match=match,

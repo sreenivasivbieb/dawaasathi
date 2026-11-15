@@ -2,9 +2,8 @@ import {
   Mic,
   Vad,
   encodeWav,
-  streamPcm,
+  playNativeAudio,
   speakText,
-  unlockAudio,
 } from "./audio.js";
 import { LANGS, LANG_NAMES, t } from "./i18n.js";
 import { renderResult, renderError, esc } from "./render.js";
@@ -167,7 +166,7 @@ function receive(response, user) {
   state.fresh = true;
   state.chemistOpen = false;
   if (user)
-    state.messages.push({ role: "user", text: response.transcript || user });
+    state.messages.push({ role: "user", text: response.match?.confirmed ? response.match.brand || user : response.transcript || user });
   state.messages.push({
     role: "assistant",
     text: response.script?.text || response.card?.title || response.status,
@@ -185,9 +184,9 @@ function receive(response, user) {
           : "reply",
   );
 }
-async function ask({ text = $("q").value.trim(), wav } = {}) {
+async function ask({ text = $("q").value.trim(), wav, audio } = {}) {
   if (state.busy || rec.on) return;
-  if (!text && !wav && !state.photos.strip && !state.photos.rx) {
+  if (!text && !wav && !audio && !state.photos.strip && !state.photos.rx) {
     $("q").focus();
     return;
   }
@@ -199,14 +198,18 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
   form.set("channel", "web");
   if (state.session) form.set("session_id", state.session);
   if (text) form.set("text", text);
-  if (wav) form.set("detect_language", "true");
+  if (wav || audio) form.set("detect_language", "true");
   if (wav)
     form.set("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
+  if (audio) {
+    const ext = audio.type.includes("mp4") ? "m4a" : audio.type.includes("ogg") ? "ogg" : "webm";
+    form.set("audio", audio, "speech." + ext);
+  }
   for (const [kind, file] of Object.entries(state.photos))
     if (file) form.set(kind, file, file.name);
   const label =
     text ||
-    (wav
+    (wav || audio
       ? t(state.lang, "attached_audio")
       : Object.entries(state.photos)
           .filter(([, f]) => f)
@@ -215,7 +218,7 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
   try {
     const response = await api("/v1/query", { form });
     receive(response, label);
-    state.voiceConversation = !!wav;
+    state.voiceConversation = !!(wav || audio);
     if (state.autoSpeak) playResponse(response);
     openHistory(true);
     // Preserve typed input and attachments when the pipeline itself reports a failure.
@@ -232,7 +235,6 @@ async function ask({ text = $("q").value.trim(), wav } = {}) {
 async function confirm(candidate, none = false) {
   if (state.busy || !state.session) return;
   stopAudio();
-  unlockAudio();
   clearError();
   setBusy(true);
   try {
@@ -260,6 +262,7 @@ async function confirm(candidate, none = false) {
   }
 }
 function stopAudio() {
+  state.playEpoch = (state.playEpoch || 0) + 1;
   const previous = state.audio;
   const audioId = state.playingAudioId;
   try {
@@ -270,15 +273,18 @@ function stopAudio() {
   state.audio = null;
   state.playingAudioId = null;
   state.speaking = false;
+  $("reply-player")?.pause();
   renderMic();
   if (previous && audioId && state.session)
     api("/v1/interrupt", { json: { session_id: state.session, audio_id: audioId } }).catch(
       () => {},
     );
 }
-function playResponse(response) {
+async function playResponse(response, { refresh = false, which = "reply" } = {}) {
   stopAudio();
-  unlockAudio();
+  const epoch = state.playEpoch;
+  const audioError = $("audio-error");
+  audioError.hidden = true;
   const onstart = () => {
     state.speaking = true;
     renderMic();
@@ -297,26 +303,41 @@ function playResponse(response) {
       { onstart, onend },
     );
   };
-  if (response?.tts === "timbre" && response.audio_stream_url) {
-    state.playingAudioId = response.audio_id;
-    state.audio = streamPcm(response.audio_stream_url, {
-      onstart,
-      onended: onend,
-      onerror: () => {
-        onend();
-        toast("voice_fallback");
-        readInBrowser();
-      },
-    });
-  } else if (response?.script?.text) readInBrowser();
+  try {
+    let speech = response;
+    if (state.cfg?.tts === "timbre" && (refresh || !speech?.audio_id || speech.tts !== "timbre")) {
+      speech = await api("/v1/speak", { json: { session_id: state.session, which, lang: response.lang || state.lang } });
+      if (epoch !== state.playEpoch) return;
+    }
+    if (speech?.tts === "timbre" && speech.audio_id) {
+      state.playingAudioId = speech.audio_id;
+      state.audio = playNativeAudio("/v1/audio/" + encodeURIComponent(speech.audio_id) + ".wav", {
+        element: $("reply-player"), onstart, onended: onend,
+        onerror: error => {
+          if (epoch !== state.playEpoch) return;
+          if (!refresh && error.name === "MediaError") {
+            playResponse(response, { refresh: true, which });
+            return;
+          }
+          onend();
+          audioError.textContent = t(state.lang, error.name === "NotAllowedError" ? "audio_blocked" : "audio_failed");
+          audioError.hidden = false;
+        },
+      });
+    } else if (response?.script?.text) readInBrowser();
+  } catch (error) {
+    if (epoch !== state.playEpoch) return;
+    onend();
+    audioError.textContent = t(state.lang, "audio_failed");
+    audioError.hidden = false;
+  }
 }
 async function speakChemist() {
   if (!state.last?.script?.chemist_text || state.busy) return;
-  unlockAudio();
   stopAudio();
   const lang = state.last.lang || state.lang;
   const fallback = () =>
-    playResponse({ script: { text: state.last.script.chemist_text }, lang });
+    playResponse({ script: { text: state.last.script.chemist_text }, lang }, { which: "chemist" });
   if (!state.fresh) {
     fallback();
     return;
@@ -325,7 +346,7 @@ async function speakChemist() {
     const response = await api("/v1/speak", {
       json: { session_id: state.session, which: "chemist", lang },
     });
-    playResponse({ ...response, script: { text: response.text }, lang });
+    playResponse({ ...response, script: { text: response.text }, lang }, { which: "chemist" });
   } catch {
     fallback();
   }
@@ -369,7 +390,7 @@ function renderMic() {
   $("voice-title").textContent = t(state.lang, "tagline");
   $("mic-label").textContent = t(
     state.lang,
-    rec.on
+    rec.starting ? "mic_starting" : rec.on
       ? "mic_listening"
       : state.speaking
         ? "mic_speaking"
@@ -385,7 +406,7 @@ function renderMic() {
   $("mic-status").hidden = false;
   $("mic-status").textContent = t(
     state.lang,
-    rec.on
+    rec.starting ? "mic_starting" : rec.on
       ? "mic_listening"
       : state.speaking
         ? "mic_speaking"
@@ -397,6 +418,8 @@ function renderMic() {
   $("lang").disabled = state.busy || rec.on || rec.starting;
   $("voice-stop").hidden = !rec.on && !state.speaking;
   $("send").disabled = state.busy || rec.on || rec.starting;
+  $("mic-device").disabled = rec.on || rec.starting || state.busy;
+  $("mic-level").hidden = !rec.on;
 }
 async function toggleRecording() {
   if (rec.on) {
@@ -410,18 +433,28 @@ async function toggleRecording() {
   renderMic();
   try {
     showMicError(null);
-    unlockAudio();
+    mic.deviceId = $("mic-device").value || null;
     await mic.start(16000);
     if (epoch !== rec.epoch || document.hidden) {
       mic.stop();
       return;
     }
     Object.assign(rec, { on: true, frames: [], heard: false, ms: 0 });
+    $("mic-level").value = 0;
+    navigator.mediaDevices?.enumerateDevices?.().then(devices => {
+      const selected = $("mic-device").value;
+      const inputs = devices.filter(d => d.kind === "audioinput");
+      $("mic-device").innerHTML = `<option value="">${esc(t(state.lang, "mic_default"))}</option>` +
+        inputs.filter(d => !["default", "communications"].includes(d.deviceId))
+          .map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || t(state.lang, "microphone") + " " + (i + 1))}</option>`).join("");
+      $("mic-device").value = selected;
+    }).catch(() => {});
     const vad = new Vad();
     mic.onframe = (pcm, rms, ms) => {
       if (!rec.on) return;
       rec.frames.push(pcm);
       rec.ms += ms;
+      $("mic-level").value = Math.min(1, rms * 12);
       const event = vad.push(rms, ms);
       if (event === "start") rec.heard = true;
       if ((event === "end" && rec.heard) || rec.ms >= 20000) finishRecording();
@@ -450,14 +483,22 @@ function cancelRecording() {
   rec.frames = [];
   renderMic();
 }
-function finishRecording() {
+async function finishRecording() {
   if (!rec.on) return;
+  rec.on = false;
+  rec.starting = true;
+  clearTimeout(rec.timer);
+  renderMic();
   const wav =
     rec.frames.length > 0 && rec.ms >= 400
       ? encodeWav(rec.frames, mic.targetRate)
       : null;
+  const epoch = rec.epoch;
+  const audio = typeof mic.finish === "function" ? await mic.finish() : null;
+  if (epoch !== rec.epoch) return;
   cancelRecording();
-  if (wav) ask({ text: "", wav });
+  if (audio?.size) ask({ text: "", audio });
+  else if (wav) ask({ text: "", wav });
   else toast("no_speech");
 }
 function setPhoto(kind, file) {
@@ -709,8 +750,13 @@ $("lang").addEventListener("change", async () => {
 });
 $("ask").addEventListener("submit", (event) => {
   event.preventDefault();
-  unlockAudio();
   ask();
+});
+$("q").addEventListener("keydown", event => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    event.preventDefault();
+    $("ask").requestSubmit();
+  }
 });
 $("mic").addEventListener("click", toggleRecording);
 $("mic-retry").addEventListener("click", toggleRecording);

@@ -1,5 +1,25 @@
 # Data
 
+## Active runtime: data1 only
+
+Run `uv run python -m scripts.load_data --src data1` from the repository root. This is also the
+default source and Docker build source. `DATA1_ONLY=1` prevents startup against a legacy fixture
+database and disables external medicine facts, including previously learned web brands.
+
+The import uses only the supplied A-Z CSV (all active parseable rows), PMBJP product-list CSV,
+DPCO ceiling CSV and banned-drug PDF. It builds atomically, saves a backup of the previous DB,
+and writes `<db-name>.import.json` with SHA-256 hashes, row counts and all PDF exclusions.
+Poppler's `pdftotext` is required. The raw inputs are unchanged.
+
+The PDF states status **as of 2021-11-22**. Legal footnotes include stayed/quashed/revoked entries;
+these and unrepresentable restrictions are excluded from exact combination matching and retained
+in the import report. The actual old date is preserved, so the app reports the list as stale.
+A-Z has no supplied snapshot date; it is left unknown. PMBJP's filename supplies 2026-11-13 and
+DPCO effective dates are retained per row. No indications, batch alerts, LASA pairs, aliases,
+synthetic prices or synthetic bans are added. Test fixtures remain available only for tests.
+
+## Legacy normalized CSV importer (DATA1_ONLY=0)
+
 Everything the verdict engine knows comes from CSV files in one directory, loaded into a single
 SQLite file by `scripts/load_data.py`:
 

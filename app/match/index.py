@@ -258,6 +258,12 @@ class MatchIndex:
                 fm = 0.5 if form is None else (1.0 if b.form == form else 0.0)
                 rl = 0.5 if release is None else (1.0 if (b.release or "IR") == release else 0.0)
                 total = 0.80 * ns + 0.12 * st_score + 0.05 * fm + 0.03 * rl
+                # A strength printed in an SR SKU name must not make it outrank the plain
+                # formulation whose same strength appears only in its composition. In the full
+                # A-Z data, "Glycomet Tablet" is 500 mg IR, alongside "Glycomet 500 SR Tablet".
+                # Keep these choices close/ambiguous when no release marker was supplied.
+                if release is None and (b.release or "IR") != "IR":
+                    total -= 0.04
                 if self._unspoken_words(b.base, q_toks, q_compact):
                     total -= EXTRA_WORD_PENALTY
                 elif self._spoken_suffix(b.base, q_toks):

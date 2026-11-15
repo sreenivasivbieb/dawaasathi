@@ -1,0 +1,22 @@
+{
+  "synthetic_microphone": true,
+  "physical_microphone_verified": false,
+  "web_audio_unavailable": true,
+  "checks": [
+    {
+      "name": "typed hello gives a greeting and actual native playback advances",
+      "passed": true
+    },
+    {
+      "name": "saved-history Replay uses server speech instead of absent OS speech voices",
+      "passed": true
+    },
+    {
+      "name": "native microphone to live STT to live TTS works without WebAudio",
+      "transcript": "Dolo छह सौ पचास का दाम बताइए।",
+      "passed": true
+    }
+  ],
+  "page_errors": [],
+  "passed": true
+}

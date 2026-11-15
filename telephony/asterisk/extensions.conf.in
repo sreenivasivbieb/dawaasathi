@@ -1,0 +1,10 @@
+; Generated stage: __STAGE__. Only the loopback-authenticated endpoint can enter.
+[dawa-local]
+exten => 700,1,NoOp(DawaaSaathi local __STAGE__ test)
+ same => n,Answer()
+ same => n,Set(TIMEOUT(absolute)=180)
+__CALL_BODY__
+ same => n,Hangup()
+
+exten => 1001,1,Dial(PJSIP/1001,20)
+ same => n,Hangup()

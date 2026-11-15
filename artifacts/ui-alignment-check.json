@@ -1,0 +1,877 @@
+{
+  "passed": true,
+  "report": [
+    {
+      "view": "desktop-compact",
+      "width": 1502,
+      "height": 726,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 1502,
+        "h": 68,
+        "bottom": 68,
+        "right": 1502,
+        "visible": true
+      },
+      "brand": {
+        "x": 0,
+        "y": 0,
+        "w": 250,
+        "h": 67,
+        "bottom": 67,
+        "right": 250,
+        "visible": true
+      },
+      "logo": {
+        "x": 24,
+        "y": 15.5,
+        "w": 36,
+        "h": 36,
+        "bottom": 51.5,
+        "right": 60,
+        "visible": true
+      },
+      "brandText": {
+        "x": 70,
+        "y": 22.9375,
+        "w": 106.046875,
+        "h": 21.109375,
+        "bottom": 44.046875,
+        "right": 176.046875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 68,
+        "w": 250,
+        "h": 658,
+        "bottom": 726,
+        "right": 250,
+        "visible": true
+      },
+      "historyHeading": {
+        "x": 24,
+        "y": 92,
+        "w": 139.28125,
+        "h": 21.28125,
+        "bottom": 113.28125,
+        "right": 163.28125,
+        "visible": true
+      },
+      "workspace": {
+        "x": 316,
+        "y": 288.0625,
+        "w": 1120,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 1436,
+        "visible": true
+      },
+      "voice": {
+        "x": 316,
+        "y": 288.0625,
+        "w": 493.1875,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 809.1875,
+        "visible": true
+      },
+      "composer": {
+        "x": 833.1875,
+        "y": 288.0625,
+        "w": 602.8125,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 1436,
+        "visible": true
+      },
+      "send": {
+        "x": 858.1875,
+        "y": 657.5,
+        "w": 552.8125,
+        "h": 46,
+        "bottom": 703.5,
+        "right": 1411,
+        "visible": true
+      },
+      "main": {
+        "x": 250,
+        "y": 68,
+        "w": 1252,
+        "h": 754.171875,
+        "bottom": 822.171875,
+        "right": 1502,
+        "visible": true
+      },
+      "language": {
+        "x": 1279.328125,
+        "y": 11.5,
+        "w": 156.671875,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 1436,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      }
+    },
+    {
+      "view": "desktop",
+      "width": 1878,
+      "height": 908,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 1878,
+        "h": 76,
+        "bottom": 76,
+        "right": 1878,
+        "visible": true
+      },
+      "brand": {
+        "x": 0,
+        "y": 0,
+        "w": 250,
+        "h": 75,
+        "bottom": 75,
+        "right": 250,
+        "visible": true
+      },
+      "logo": {
+        "x": 24,
+        "y": 19.5,
+        "w": 36,
+        "h": 36,
+        "bottom": 55.5,
+        "right": 60,
+        "visible": true
+      },
+      "brandText": {
+        "x": 70,
+        "y": 26.9375,
+        "w": 106.046875,
+        "h": 21.109375,
+        "bottom": 48.046875,
+        "right": 176.046875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 76,
+        "w": 250,
+        "h": 832,
+        "bottom": 908,
+        "right": 250,
+        "visible": true
+      },
+      "historyHeading": {
+        "x": 24,
+        "y": 100,
+        "w": 139.28125,
+        "h": 21.28125,
+        "bottom": 121.28125,
+        "right": 163.28125,
+        "visible": true
+      },
+      "workspace": {
+        "x": 504,
+        "y": 375.609375,
+        "w": 1120,
+        "h": 490.8125,
+        "bottom": 866.421875,
+        "right": 1624,
+        "visible": true
+      },
+      "voice": {
+        "x": 504,
+        "y": 375.609375,
+        "w": 493.1875,
+        "h": 490.8125,
+        "bottom": 866.421875,
+        "right": 997.1875,
+        "visible": true
+      },
+      "composer": {
+        "x": 1021.1875,
+        "y": 375.609375,
+        "w": 602.8125,
+        "h": 490.8125,
+        "bottom": 866.421875,
+        "right": 1624,
+        "visible": true
+      },
+      "send": {
+        "x": 1046.1875,
+        "y": 795.421875,
+        "w": 552.8125,
+        "h": 46,
+        "bottom": 841.421875,
+        "right": 1599,
+        "visible": true
+      },
+      "main": {
+        "x": 250,
+        "y": 76,
+        "w": 1628,
+        "h": 888.09375,
+        "bottom": 964.09375,
+        "right": 1878,
+        "visible": true
+      },
+      "language": {
+        "x": 1467.328125,
+        "y": 15.5,
+        "w": 156.671875,
+        "h": 44,
+        "bottom": 59.5,
+        "right": 1624,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      }
+    },
+    {
+      "view": "laptop",
+      "width": 1280,
+      "height": 800,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 68,
+        "bottom": 68,
+        "right": 1280,
+        "visible": true
+      },
+      "brand": {
+        "x": 0,
+        "y": 0,
+        "w": 250,
+        "h": 67,
+        "bottom": 67,
+        "right": 250,
+        "visible": true
+      },
+      "logo": {
+        "x": 24,
+        "y": 15.5,
+        "w": 36,
+        "h": 36,
+        "bottom": 51.5,
+        "right": 60,
+        "visible": true
+      },
+      "brandText": {
+        "x": 70,
+        "y": 22.9375,
+        "w": 106.046875,
+        "h": 21.109375,
+        "bottom": 44.046875,
+        "right": 176.046875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 68,
+        "w": 250,
+        "h": 732,
+        "bottom": 800,
+        "right": 250,
+        "visible": true
+      },
+      "historyHeading": {
+        "x": 24,
+        "y": 92,
+        "w": 139.28125,
+        "h": 21.28125,
+        "bottom": 113.28125,
+        "right": 163.28125,
+        "visible": true
+      },
+      "workspace": {
+        "x": 288.390625,
+        "y": 288.0625,
+        "w": 953.21875,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 1241.609375,
+        "visible": true
+      },
+      "voice": {
+        "x": 288.390625,
+        "y": 288.0625,
+        "w": 418.140625,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 706.53125,
+        "visible": true
+      },
+      "composer": {
+        "x": 730.53125,
+        "y": 288.0625,
+        "w": 511.078125,
+        "h": 436.4375,
+        "bottom": 724.5,
+        "right": 1241.609375,
+        "visible": true
+      },
+      "send": {
+        "x": 755.53125,
+        "y": 657.5,
+        "w": 461.078125,
+        "h": 46,
+        "bottom": 703.5,
+        "right": 1216.609375,
+        "visible": true
+      },
+      "main": {
+        "x": 250,
+        "y": 68,
+        "w": 1030,
+        "h": 754.171875,
+        "bottom": 822.171875,
+        "right": 1280,
+        "visible": true
+      },
+      "language": {
+        "x": 1084.9375,
+        "y": 11.5,
+        "w": 156.671875,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 1241.609375,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      }
+    },
+    {
+      "view": "small-desktop",
+      "width": 1024,
+      "height": 768,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 1024,
+        "h": 68,
+        "bottom": 68,
+        "right": 1024,
+        "visible": true
+      },
+      "brand": {
+        "x": 0,
+        "y": 0,
+        "w": 250,
+        "h": 67,
+        "bottom": 67,
+        "right": 250,
+        "visible": true
+      },
+      "logo": {
+        "x": 24,
+        "y": 15.5,
+        "w": 36,
+        "h": 36,
+        "bottom": 51.5,
+        "right": 60,
+        "visible": true
+      },
+      "brandText": {
+        "x": 70,
+        "y": 22.9375,
+        "w": 106.046875,
+        "h": 21.109375,
+        "bottom": 44.046875,
+        "right": 176.046875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 68,
+        "w": 250,
+        "h": 700,
+        "bottom": 768,
+        "right": 250,
+        "visible": true
+      },
+      "historyHeading": {
+        "x": 24,
+        "y": 92,
+        "w": 139.28125,
+        "h": 21.28125,
+        "bottom": 113.28125,
+        "right": 163.28125,
+        "visible": true
+      },
+      "workspace": {
+        "x": 280.71875,
+        "y": 288.0625,
+        "w": 712.5625,
+        "h": 454.921875,
+        "bottom": 742.984375,
+        "right": 993.28125,
+        "visible": true
+      },
+      "voice": {
+        "x": 280.71875,
+        "y": 288.0625,
+        "w": 309.84375,
+        "h": 454.921875,
+        "bottom": 742.984375,
+        "right": 590.5625,
+        "visible": true
+      },
+      "composer": {
+        "x": 614.5625,
+        "y": 288.0625,
+        "w": 378.71875,
+        "h": 454.921875,
+        "bottom": 742.984375,
+        "right": 993.28125,
+        "visible": true
+      },
+      "send": {
+        "x": 639.5625,
+        "y": 675.984375,
+        "w": 328.71875,
+        "h": 46,
+        "bottom": 721.984375,
+        "right": 968.28125,
+        "visible": true
+      },
+      "main": {
+        "x": 250,
+        "y": 68,
+        "w": 774,
+        "h": 772.65625,
+        "bottom": 840.65625,
+        "right": 1024,
+        "visible": true
+      },
+      "language": {
+        "x": 836.609375,
+        "y": 11.5,
+        "w": 156.671875,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 993.28125,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      }
+    },
+    {
+      "view": "tablet",
+      "width": 768,
+      "height": 1024,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 768,
+        "h": 76,
+        "bottom": 76,
+        "right": 768,
+        "visible": true
+      },
+      "brand": {
+        "x": 0,
+        "y": 0,
+        "w": 503.5,
+        "h": 75,
+        "bottom": 75,
+        "right": 503.5,
+        "visible": true
+      },
+      "logo": {
+        "x": 24,
+        "y": 19.5,
+        "w": 36,
+        "h": 36,
+        "bottom": 55.5,
+        "right": 60,
+        "visible": true
+      },
+      "brandText": {
+        "x": 70,
+        "y": 26.9375,
+        "w": 106.046875,
+        "h": 21.109375,
+        "bottom": 48.046875,
+        "right": 176.046875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      },
+      "historyHeading": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": true
+      },
+      "workspace": {
+        "x": 24,
+        "y": 341.046875,
+        "w": 720,
+        "h": 504.921875,
+        "bottom": 845.96875,
+        "right": 744,
+        "visible": true
+      },
+      "voice": {
+        "x": 24,
+        "y": 341.046875,
+        "w": 313.1875,
+        "h": 504.921875,
+        "bottom": 845.96875,
+        "right": 337.1875,
+        "visible": true
+      },
+      "composer": {
+        "x": 361.1875,
+        "y": 341.046875,
+        "w": 382.8125,
+        "h": 504.921875,
+        "bottom": 845.96875,
+        "right": 744,
+        "visible": true
+      },
+      "send": {
+        "x": 386.1875,
+        "y": 774.96875,
+        "w": 332.8125,
+        "h": 46,
+        "bottom": 820.96875,
+        "right": 719,
+        "visible": true
+      },
+      "main": {
+        "x": 0,
+        "y": 76,
+        "w": 768,
+        "h": 867.640625,
+        "bottom": 943.640625,
+        "right": 768,
+        "visible": true
+      },
+      "language": {
+        "x": 587.328125,
+        "y": 15.5,
+        "w": 156.671875,
+        "h": 44,
+        "bottom": 59.5,
+        "right": 744,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 503.5,
+        "y": 15.5,
+        "w": 71.828125,
+        "h": 44,
+        "bottom": 59.5,
+        "right": 575.328125,
+        "visible": true
+      }
+    },
+    {
+      "view": "mobile",
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 68,
+        "bottom": 68,
+        "right": 390,
+        "visible": true
+      },
+      "brand": {
+        "x": 14,
+        "y": 0,
+        "w": 202.15625,
+        "h": 67,
+        "bottom": 67,
+        "right": 216.15625,
+        "visible": true
+      },
+      "logo": {
+        "x": 14,
+        "y": 17.5,
+        "w": 32,
+        "h": 32,
+        "bottom": 49.5,
+        "right": 46,
+        "visible": true
+      },
+      "brandText": {
+        "x": 54,
+        "y": 24.375,
+        "w": 91.546875,
+        "h": 18.234375,
+        "bottom": 42.609375,
+        "right": 145.546875,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      },
+      "historyHeading": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": true
+      },
+      "workspace": {
+        "x": 18,
+        "y": 321.96875,
+        "w": 354,
+        "h": 1012.328125,
+        "bottom": 1334.296875,
+        "right": 372,
+        "visible": true
+      },
+      "voice": {
+        "x": 18,
+        "y": 321.96875,
+        "w": 354,
+        "h": 474.8125,
+        "bottom": 796.78125,
+        "right": 372,
+        "visible": true
+      },
+      "composer": {
+        "x": 18,
+        "y": 812.78125,
+        "w": 354,
+        "h": 521.515625,
+        "bottom": 1334.296875,
+        "right": 372,
+        "visible": true
+      },
+      "send": {
+        "x": 41,
+        "y": 1265.296875,
+        "w": 308,
+        "h": 46,
+        "bottom": 1311.296875,
+        "right": 349,
+        "visible": true
+      },
+      "main": {
+        "x": 0,
+        "y": 68,
+        "w": 390,
+        "h": 1391.96875,
+        "bottom": 1459.96875,
+        "right": 390,
+        "visible": true
+      },
+      "language": {
+        "x": 286,
+        "y": 11.5,
+        "w": 90,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 376,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 224.15625,
+        "y": 11.5,
+        "w": 53.84375,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 278,
+        "visible": true
+      }
+    },
+    {
+      "view": "small-mobile",
+      "width": 320,
+      "height": 740,
+      "overflow": false,
+      "header": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 68,
+        "bottom": 68,
+        "right": 320,
+        "visible": true
+      },
+      "brand": {
+        "x": 10,
+        "y": 0,
+        "w": 151.15625,
+        "h": 67,
+        "bottom": 67,
+        "right": 161.15625,
+        "visible": true
+      },
+      "logo": {
+        "x": 10,
+        "y": 17.5,
+        "w": 32,
+        "h": 32,
+        "bottom": 49.5,
+        "right": 42,
+        "visible": true
+      },
+      "brandText": {
+        "x": 48,
+        "y": 25.046875,
+        "w": 84.859375,
+        "h": 16.890625,
+        "bottom": 41.9375,
+        "right": 132.859375,
+        "visible": true
+      },
+      "history": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": false
+      },
+      "historyHeading": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0,
+        "bottom": 0,
+        "right": 0,
+        "visible": true
+      },
+      "workspace": {
+        "x": 18,
+        "y": 364.71875,
+        "w": 284,
+        "h": 1079.90625,
+        "bottom": 1444.625,
+        "right": 302,
+        "visible": true
+      },
+      "voice": {
+        "x": 18,
+        "y": 364.71875,
+        "w": 284,
+        "h": 505.03125,
+        "bottom": 869.75,
+        "right": 302,
+        "visible": true
+      },
+      "composer": {
+        "x": 18,
+        "y": 885.75,
+        "w": 284,
+        "h": 558.875,
+        "bottom": 1444.625,
+        "right": 302,
+        "visible": true
+      },
+      "send": {
+        "x": 41,
+        "y": 1375.625,
+        "w": 238,
+        "h": 46,
+        "bottom": 1421.625,
+        "right": 279,
+        "visible": true
+      },
+      "main": {
+        "x": 0,
+        "y": 68,
+        "w": 320,
+        "h": 1502.296875,
+        "bottom": 1570.296875,
+        "right": 320,
+        "visible": true
+      },
+      "language": {
+        "x": 225,
+        "y": 11.5,
+        "w": 85,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 310,
+        "visible": true
+      },
+      "historyButton": {
+        "x": 166.15625,
+        "y": 11.5,
+        "w": 53.84375,
+        "h": 44,
+        "bottom": 55.5,
+        "right": 220,
+        "visible": true
+      }
+    },
+    {
+      "view": "mobile-history",
+      "open_close": true
+    },
+    {
+      "view": "confirmed-selection",
+      "fresh_and_saved": true,
+      "original_transcript_preserved": true,
+      "sticky_header_and_history": true
+    }
+  ],
+  "page_errors": []
+}

@@ -3,6 +3,7 @@
   "reviewed_by": null,
   "review_note": "Draft Marathi — needs native-speaker review and back-translation before the demo.",
   "lines": {
+    "greeting": "नमस्कार! औषधाचे नाव सांगा किंवा औषधाच्या पट्टीचा फोटो पाठवा. मी त्यातील घटक आणि किंमत तपासण्यात मदत करू शकतो.",
     "doctor": "कृपया आपल्या डॉक्टर किंवा फार्मासिस्टकडून खात्री करून घ्या.",
     "filler": "एक क्षण थांबा, तपासत आहोत.",
     "error_stt": "माफ करा, आवाज स्पष्ट आला नाही. कृपया औषधाचे नाव पुन्हा सांगा.",

@@ -1,5 +1,8 @@
 # Backend alignment and user-flow verification
 
+> Historical verification below used the development fixtures. The current data1-only runtime
+> and restored voice interpretation are documented in [regression audit](regression-audit.md).
+
 The website now represents the medicine assistant implemented by the backend. It offers typed
 questions, photo uploads (strip, prescription, or both), candidate confirmation,
 conversation history, answer playback, and chemist scripts. The current UI uses a mint gradient
