@@ -40,14 +40,17 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 
 
 # ---------------------------------------------------------------- rate limiting
-_HITS: dict[str, deque[float]] = defaultdict(deque)
-
-
 def rate_limit(request: Request) -> None:
     limit = request.app.state.settings.rate_limit_per_min
     key = request.client.host if request.client else "anon"
-    now = time.time()
-    q = _HITS[key]
+    now = time.monotonic()
+    # Scope the buckets to this application, and discard inactive clients.
+    hits = getattr(request.app.state, "rate_hits", None)
+    if hits is None:
+        hits = request.app.state.rate_hits = defaultdict(deque)
+    for host in [host for host, entries in hits.items() if not entries or now - entries[-1] > 60]:
+        del hits[host]
+    q = hits[key]
     while q and now - q[0] > 60:
         q.popleft()
     if len(q) >= limit:
@@ -95,6 +98,7 @@ async def query(
     pouch: str | None = Form(None),
     text: str | None = Form(None),
     channel: str = Form("web"),
+    detect_language: bool = Form(True),
 ):
     rate_limit(request)
     s = request.app.state.settings
@@ -113,6 +117,7 @@ async def query(
             raise APIError(400, "AUDIO_DECODE", str(exc)) from exc
     inp = QueryInput(session_id=session_id, lang=_lang(lang), audio=audio_b, audio_name=audio_name, text=text,
                      strip=strip_b, rx=rx_b, pouch=_parse_pouch(pouch),
+                     detect_language=detect_language and bool(audio_b) and not bool(text),
                      channel=channel if channel in ("web", "phone") else "web")
     resp = await request.app.state.pipeline.query(inp)
     return JSONResponse(public_response(resp.model_dump(mode="json"), s, s.expose_debug))
@@ -358,7 +363,30 @@ async def thread_messages(request: Request, thread_id: str, limit: int = Query(2
     local = request.app.state.local
     if not local.thread_exists(tid):
         raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
-    return {"id": tid, "lang": local.thread_lang(tid), "messages": local.messages(tid, limit)}
+    messages = local.messages(tid, limit)
+    for message in messages:
+        if message.get("response"):
+            message["response"] = public_response(message["response"], request.app.state.settings, False)
+    return {"id": tid, "lang": local.thread_lang(tid), "messages": messages}
+
+
+@router.get("/v1/threads/{thread_id}/localized")
+async def localized_thread(request: Request, thread_id: str, lang: str = Query("en")):
+    from app.localization import localize_response
+
+    rate_limit(request)
+    tid = _thread_id(thread_id)
+    local = request.app.state.local
+    if not local.thread_exists(tid):
+        raise APIError(404, "THREAD_NOT_FOUND", "Unknown thread.")
+    messages = local.messages(tid)
+    for message in messages:
+        if message.get("response"):
+            response = localize_response(message["response"], _lang(lang))
+            message["response"] = public_response(response, request.app.state.settings, False)
+            message["text"] = response["script"]["text"]
+            message["lang"] = _lang(lang)
+    return {"id": tid, "lang": _lang(lang), "messages": messages}
 
 
 @router.delete("/v1/threads/{thread_id}")
@@ -395,4 +423,6 @@ async def config(request: Request):
     return {"languages": langs, "stt": "prisma" if st.settings.stt_live else "mock",
             "tts": "timbre" if st.audio.live else "mock", "ocr": st.ocr.provider,
             "sample_rate": st.settings.tts_sample_rate,
+            "max_image_bytes": st.settings.max_image_bytes,
+            "max_audio_bytes": st.settings.max_audio_bytes,
             "data_sources": st.pipeline._data_sources()}

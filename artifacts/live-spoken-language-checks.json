@@ -1,0 +1,34 @@
+{
+  "synthetic_audio": true,
+  "providers": "live Gnani Prisma v3 and Timbre v3",
+  "physical_microphone_verified": false,
+  "audible_playback_verified": false,
+  "checks": [
+    {
+      "spoken": "hi",
+      "ui": "en",
+      "transcript": "Dolo छह सौ पचास का दाम बताइए।",
+      "detected_language": "hi",
+      "reply_language": "hi",
+      "script_language": "hi",
+      "status": "ok",
+      "tts": "timbre",
+      "audio_seconds": 19.55,
+      "reply": "Dolo 650 में Paracetamol 650 mg है। इसका दाम 15 गोलियाँ के 33.60 रुपये है, और जन औषधि में 10 गोलियाँ के 12 रुपये। यह दाम सरकारी अधिकतम कीमत, यानी NPPA सीमा के अंदर है। कृपया अपने डॉक्टर या फार्मासिस्ट से पुष्टि करें।",
+      "passed": true
+    },
+    {
+      "spoken": "en",
+      "ui": "hi",
+      "transcript": "What is the price of Dolo six fifty tablets?",
+      "detected_language": "en",
+      "reply_language": "en",
+      "script_language": "en",
+      "status": "ok",
+      "tts": "timbre",
+      "audio_seconds": 18.19,
+      "reply": "Dolo 650 contains Paracetamol 650 mg. This costs 33.60 rupees for 15 tablets; at Jan Aushadhi, 10 tablets cost 12 rupees. This price is within the government NPPA ceiling. Please confirm with your doctor or pharmacist.",
+      "passed": true
+    }
+  ]
+}

@@ -223,7 +223,7 @@ class OCRReader:
         vlm = [p for p in providers if p in ("groq", "anthropic")]
         # Offline OCR runs beside the VLM (cross-check + brand lines) and is the fallback reader.
         local_task = (asyncio.create_task(self._local(jpeg, kind))
-                      if kind == "strip" and "rapidocr" in providers else None)
+                      if "rapidocr" in providers else None)
         errors: list[str] = []
         for provider in vlm:
             try:
@@ -237,7 +237,7 @@ class OCRReader:
                 errors.append(f"{provider}: empty")
                 continue
             local, local_ms = await self._await_local(local_task)
-            if local is not None and local.items and payload.items:
+            if kind == "strip" and local is not None and local.items and payload.items:
                 lo = local.items[0]
                 for item in payload.items[:1]:
                     item.raw_text, item.big_text = lo.raw_text, lo.big_text
@@ -369,7 +369,8 @@ def _tesseract(jpeg: bytes, kind: str) -> OCRPayload:
     payload = parse_ocr_text(texts[0], kind)
     raw = "\n".join(texts)
     for item in payload.items:
-        item.raw_text = raw[:4000]
+        if kind == "strip":
+            item.raw_text = raw[:4000]
     return payload
 
 
@@ -384,7 +385,8 @@ def parse_ocr_text(text: str, kind: str = "strip") -> OCRPayload:
             if m:
                 form = {"tab": "tablet", "tah": "tablet", "cap": "capsule", "syp": "syrup", "syr": "syrup",
                         "inj": "injection"}[m.group(1).lower()]
-                items.append(OCRItem(brand=m.group(2).split("  ")[0][:60], form=form))
+                name = m.group(2).split("  ")[0][:60]
+                items.append(OCRItem(brand=name, form=form, raw_text=name))
             elif items and items[-1].directions is None and re.search(r"\d\s*-\s*\d|days?|food|sos", ln, re.I):
                 items[-1].directions = ln[:120]
         return OCRPayload(kind="rx", readable=bool(items), items=items, notes="tesseract")
@@ -481,10 +483,13 @@ class LocalOCR:
         from app.engine.strip_text import is_supplement
 
         for item in payload.items:
-            item.raw_text = text[:4000]
-            item.big_text = seen
-            item.brand = None  # a guessed line is not a brand; the matcher picks from big_text
-            item.composition_text = None  # salts come from the closed-set extractor in the pipeline
+            if kind == "strip":
+                item.raw_text = text[:4000]
+                item.big_text = seen
+                item.brand = None  # a guessed pack line is not a brand
+                item.composition_text = None  # closed-set extraction in the pipeline
+            # A prescription's parsed medicine line belongs to this item only. Do not
+            # merge ingredients from the other medicines or patient/doctor headers.
             if item.mrp is not None and not _MRP_PAISE_RE.search(text):
                 item.mrp = None  # "M.R.P.13.75" misread as "MRP75": a wrong price is worse than none
             if is_supplement(text):

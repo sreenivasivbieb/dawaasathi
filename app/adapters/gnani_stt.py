@@ -63,6 +63,8 @@ class PrismaSTT:
         model: str | None = None,
     ) -> STTResult:
         model = model or self.s.stt_model
+        if lang == "auto":
+            model = "prisma-v3.0"
         v3 = model.startswith("prisma-v3")
         data: dict[str, str] = {"language_code": language_code(self.s, lang, model)}
         if v3:
@@ -123,6 +125,14 @@ class PrismaSTT:
             wait *= 2
         assert last_exc is not None
         raise last_exc
+
+
+def detected_language(code: str | None) -> str | None:
+    """Accept only languages our reply templates support."""
+    if not isinstance(code, str):
+        return None
+    lang = code.strip().lower().replace("_", "-").split("-")[0]
+    return lang if lang in LANGS else None
 
 
 def _error_from(resp: httpx.Response) -> STTError:

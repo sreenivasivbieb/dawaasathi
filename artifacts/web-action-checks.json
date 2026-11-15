@@ -1,0 +1,75 @@
+{
+  "dom_checks": 17,
+  "backend": "http://127.0.0.1:8002",
+  "visual_browser": false,
+  "checks": [
+    {
+      "name": "empty start has no seeded consultation or prices",
+      "passed": true
+    },
+    {
+      "name": "unconfigured microphone disabled; demo data disclosed",
+      "passed": true
+    },
+    {
+      "name": "secondary tools and promotional blocks removed",
+      "passed": true
+    },
+    {
+      "name": "ambiguous medicine has working candidate actions",
+      "passed": true
+    },
+    {
+      "name": "candidate choice resolves real backend result",
+      "passed": true
+    },
+    {
+      "name": "chemist action expands backend script",
+      "passed": true
+    },
+    {
+      "name": "history reopens actual saved conversation",
+      "passed": true
+    },
+    {
+      "name": "language change updates labels and existing result",
+      "passed": true
+    },
+    {
+      "name": "new conversation clears previous result",
+      "passed": true
+    },
+    {
+      "name": "network failure retains input and displays retryable error",
+      "passed": true
+    },
+    {
+      "name": "retry succeeds and clears error",
+      "passed": true
+    },
+    {
+      "name": "photo selection displays removable attachment",
+      "passed": true
+    },
+    {
+      "name": "real uploaded photo renders identified medicine and clears attachment",
+      "passed": true
+    },
+    {
+      "name": "supporting details are collapsed; no pouch or symptom controls",
+      "passed": true
+    },
+    {
+      "name": "two real photos show mismatch and comparison without expanding details",
+      "passed": true
+    },
+    {
+      "name": "history deletion refreshes list",
+      "passed": true
+    },
+    {
+      "name": "no unhandled application errors",
+      "passed": true
+    }
+  ]
+}

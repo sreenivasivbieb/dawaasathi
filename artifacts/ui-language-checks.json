@@ -1,0 +1,77 @@
+{
+  "checks": [
+    {
+      "language": "hi",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "en",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "mr",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "bn",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "gu",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "pa",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "ta",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "te",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "kn",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    },
+    {
+      "language": "ml",
+      "static_labels": true,
+      "accessibility": true,
+      "status_and_history": true,
+      "result_language": true
+    }
+  ],
+  "visual_browser": false,
+  "pending_confirmation_language": true,
+  "medical_names_and_user_input_preserved": true
+}

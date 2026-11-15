@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.adapters.gnani_stt import STTError
+from app.adapters.gnani_stt import STTError, detected_language
 from app.adapters.llm import GroqLLM, LLMError, nlu_to_text
 from app.adapters.ocr import OCRItem, OCRReader
 from app.config import Settings
@@ -65,6 +65,8 @@ class QueryInput:
     pouch: list[str] = field(default_factory=list)
     channel: str = "web"  # web | phone | stream
     tts_sample_rate: int | None = None
+    detect_language: bool = False
+    detected_language: str | None = None
 
 
 @dataclass
@@ -84,6 +86,7 @@ class Turn:
     followup: str | None = None
     ocr_meta: dict[str, Any] = field(default_factory=dict)
     llm_meta: dict[str, Any] = field(default_factory=dict)
+    voice_request: bool = False
 
 
 # If the template names one of these, the reworded reply must keep it (a dropped "at Jan Aushadhi"
@@ -136,6 +139,7 @@ class Pipeline:
     # ================================================================== entry points
     async def query(self, inp: QueryInput) -> QueryResponse:
         resp = await self._query(inp)
+        resp.detected_language = inp.detected_language
         attachments = [k for k, v in (("audio", inp.audio), ("strip", inp.strip), ("rx", inp.rx)) if v]
         self._record(resp, inp.lang, inp.text or resp.transcript, attachments)
         return resp
@@ -185,13 +189,19 @@ class Pipeline:
             if not inp.audio:
                 return None
             t0 = time.perf_counter()
-            if not self.s.stt_dual:
-                res = await self.stt.transcribe(inp.audio, inp.audio_name, inp.lang, self.keyterms,
+            if inp.detect_language or not self.s.stt_dual:
+                res = await self.stt.transcribe(inp.audio, inp.audio_name, "auto" if inp.detect_language else inp.lang, self.keyterms,
                                                 session.last_transcript)
                 asr_meta["model"] = res.model or self.s.stt_model
             else:
                 res, dual_meta = await self._dual_asr(inp, session.last_transcript)
                 asr_meta.update(dual_meta)
+            if inp.detect_language:
+                inp.detected_language = detected_language(res.detected_lang)
+                if inp.detected_language:
+                    inp.lang = inp.detected_language
+                    session.lang = inp.lang
+                asr_meta["detected_language"] = inp.detected_language
             timings["asr"] = round((time.perf_counter() - t0) * 1000, 1)
             METRICS.observe("asr", timings["asr"])
             return res.text
@@ -234,6 +244,9 @@ class Pipeline:
                                            error_kind="service" if service else "stt", error_code=code)
         else:
             transcript = clean_input(asr_r)
+            if inp.audio and not inp.text and not transcript and not inp.strip and not inp.rx:
+                return self._finish_simple(session, inp, "error", timings, t_start,
+                                           error_kind="stt", error_code="NO_SPEECH")
             if transcript and (g := check_query(transcript)).blocked:  # spoken: before the LLM sees it
                 return self._finish_guard(session, inp, g.kind, timings, t_start, transcript)
         for r in (strip_r, rx_r):
@@ -246,7 +259,8 @@ class Pipeline:
         llm_meta: dict[str, Any] = {}
         if asr_meta:
             llm_meta["asr"] = asr_meta
-        if transcript and not session.pending and self.llm is not None and self.s.llm_nlu:
+        voice_request = bool(inp.audio) or inp.channel in ("stream", "phone")
+        if transcript and not voice_request and not session.pending and self.llm is not None and self.s.llm_nlu:
             ents = await self._llm_understand(transcript, ents, inp.lang, timings, llm_meta)
         if transcript:
             session.last_transcript = transcript
@@ -265,15 +279,22 @@ class Pipeline:
                 return await self._resume(session, pick, timings, t_start, transcript)
             session.pending = None  # a fresh question; fall through
 
-        # ---- symptom-only follow-up about the last medicine ("बुखार के लिए")
-        if (ents and ents.symptom and not ents.name_tokens and not inp.strip and not inp.rx
+        # ---- follow-up about the last medicine ("बुखार के लिए", "what is it used for?")
+        reference_intents = {"USE_QUERY", "PRICE_CHECK", "FIND_GENERIC", "DOSAGE_QUERY", "VERIFY_MATCH"}
+        if (ents and (ents.symptom or ents.intent in reference_intents)
+                and not ents.name_tokens and not ents.strengths and not ents.form and not ents.release
+                and not inp.strip and not inp.rx
                 and session.last_item is not None and session.last_context):
             ctx = dict(session.last_context)
-            turn = Turn(lang=inp.lang, transcript=transcript, ents={**ctx["ents"], "symptom": ents.symptom},
+            follow_ents = {**ctx["ents"], "symptom": ents.symptom}
+            if ents.intent in reference_intents:
+                follow_ents["intent"] = ents.intent
+            turn = Turn(lang=inp.lang, transcript=transcript, ents=follow_ents,
                         strip_item=ctx.get("strip_item"), rx_items=ctx.get("rx_items", []),
                         voice_item=ctx.get("voice_item"), chosen_rx=ctx.get("chosen_rx"),
                         pouch=inp.pouch, timings=timings, channel=inp.channel,
-                        tts_sample_rate=inp.tts_sample_rate, followup="symptom")
+                        tts_sample_rate=inp.tts_sample_rate, followup="symptom" if ents.symptom else "reference",
+                        voice_request=voice_request)
             return await self._answer(session, turn, t_start)
 
         # ---- OCR -> items (closed-set against the brand DB)
@@ -287,7 +308,7 @@ class Pipeline:
         turn = Turn(lang=inp.lang, transcript=transcript, ents=_ents_summary(ents), strip_item=strip_item,
                     rx_items=rx_items, voice_item=None, chosen_rx=None, pouch=inp.pouch, timings=timings,
                     channel=inp.channel, tts_sample_rate=inp.tts_sample_rate, ocr_meta=ocr_meta,
-                    llm_meta=llm_meta)
+                    llm_meta=llm_meta, voice_request=voice_request)
 
         # ---- voice -> brand (the web lookup first, if the drug DB has no good match for the name)
         if ents and ents.name_tokens and not inp.strip and not inp.rx:
@@ -493,7 +514,7 @@ class Pipeline:
     async def _web_brand_fallback(self, ents: Entities, turn: Turn) -> None:
         """Name not (well) matched by the drug DB -> find the brand's composition on the web and add it."""
         # A bare word with no question and no strength ("hello", "acha") is chatter, not a drug name.
-        if self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
+        if turn.voice_request or self.web_brands is None or (ents.intent == "CLARIFY" and not ents.strengths):
             return
         res = self._search_ents(ents)
         if res.top is not None and res.top.score >= self.s.web_brand_min_score:
@@ -520,7 +541,7 @@ class Pipeline:
             return []
         uses = checks.usual_uses(self.store, target)
         web = None
-        if uses is None and self.web_uses is not None and self.s.web_lookup:
+        if uses is None and not turn.voice_request and self.web_uses is not None and self.s.web_lookup:
             found = await self.web_uses.lookup(target)
             turn.llm_meta["web_uses"] = ({"found": False} if found is None else
                                          {"found": True, "uses": found.uses, "source": found.source,
@@ -665,6 +686,7 @@ class Pipeline:
         pending = session.pending
         session.pending = None
         turn: Turn = pending["turn"]
+        turn.lang = session.lang
         turn.timings = timings
         if transcript:
             turn.transcript = transcript
@@ -770,7 +792,11 @@ class Pipeline:
                     brand_lines.append(ln)
         found: list[tuple[str, MatchResult]] = []
         for line in brand_lines:
-            tokens = re.findall(r"[^\s]+", line)
+            # OCR often joins the trade name and strength (AUGMENTIN625,
+            # GLYCOMET-SR500). Keep the printed line but tokenize those boundaries.
+            spaced = re.sub(r"(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])", " ", line)
+            spaced = re.sub(r"-(?=(?:SR|ER|XR|CR|DR)\b)", " ", spaced, flags=re.I)
+            tokens = re.findall(r"[^\s]+", spaced)
             nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", line)]
             res = self.index.search(tokens, strengths=nums or None, form=form, release=release,
                                     t1=self.s.match_t1, t2=self.s.match_t2)
@@ -990,7 +1016,7 @@ class Pipeline:
         symptom_answer = any(f.code.startswith(ANSWER_FLAG_PREFIXES) for f in flags)
         from app.config import REWRITE_LANGS
 
-        if self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
+        if not turn.voice_request and self.llm is not None and self.s.llm_reply and not symptom_answer and turn.lang in REWRITE_LANGS:
             facts = {"verdict": verdict.code, "medicine": target.model_dump(include={"brand", "salts", "form",
                                                                                         "release", "mrp", "pack_qty"}),
                      "price": price.model_dump(exclude_none=True),

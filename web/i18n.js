@@ -4,20 +4,20 @@
 // sub-label, shown in small type when the UI language is not English.
 // Pure data + helpers; no DOM access so it can be imported from Node for tests.
 
+import { INTERFACE } from "./i18n/interface.js";
 import bn from "./i18n/bn.js";
 import gu from "./i18n/gu.js";
 import kn from "./i18n/kn.js";
 import ml from "./i18n/ml.js";
-import or from "./i18n/or.js";
 import pa from "./i18n/pa.js";
 import ta from "./i18n/ta.js";
 import te from "./i18n/te.js";
 import { TERMS } from "./i18n/terms.js";
 
-export const LANGS = ["hi", "en", "mr", "bn", "gu", "pa", "or", "ta", "te", "kn", "ml"];
+export const LANGS = ["hi", "en", "mr", "bn", "gu", "pa", "ta", "te", "kn", "ml"];
 /** Each language's own name, for the language picker. */
 export const LANG_NAMES = {
-  hi: "हिंदी", en: "English", mr: "मराठी", bn: "বাংলা", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ", or: "ଓଡ଼ିଆ",
+  hi: "हिंदी", en: "English", mr: "मराठी", bn: "বাংলা", gu: "ગુજરાતી", pa: "ਪੰਜਾਬੀ",
   ta: "தமிழ்", te: "తెలుగు", kn: "ಕನ್ನಡ", ml: "മലയാളം",
 };
 export const SPEECH_LANG = Object.fromEntries(LANGS.map((l) => [l, `${l}-IN`]));
@@ -544,7 +544,7 @@ const PACK_UNITS = {
 };
 
 // ------------------------------------------------------------------ other Indian languages
-const BY_LANG = { bn, gu, pa, or, ta, te, kn, ml };
+const BY_LANG = { bn, gu, pa, ta, te, kn, ml };
 for (const [lang, mod] of Object.entries(BY_LANG)) {
   S[lang] = mod.S;
   VERDICT[lang] = mod.VERDICT;
@@ -555,6 +555,9 @@ for (const [lang, mod] of Object.entries(BY_LANG)) {
     for (const [k, v] of Object.entries(terms[key] || {})) if (table[k]) table[k][lang] = v;
   }
 }
+
+for (const [lang, labels] of Object.entries(INTERFACE)) Object.assign(S[lang], labels);
+for (const lang of LANGS) S[lang].err_NO_SPEECH = S[lang].no_speech;
 
 function fill(str, vars) {
   if (!vars) return str;
@@ -569,7 +572,7 @@ export function t(lang, key, vars) {
 }
 /** English sub-label for a key, or "" when the UI is already English. */
 export function sub(lang, key, vars) {
-  return lang === "en" ? "" : fill(S.en[key] ?? "", vars);
+  return "";
 }
 export function verdictTitle(lang, key) {
   return pick(VERDICT, lang, key) ?? key;

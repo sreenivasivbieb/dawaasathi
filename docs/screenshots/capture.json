@@ -1,0 +1,100 @@
+{
+  "captured_at": "2026-11-14T17:51:09.585Z",
+  "base_url": "http://127.0.0.1:8004",
+  "browser": "Chromium (headless)",
+  "desktop": {
+    "width": 1440,
+    "height": 1100
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844
+  },
+  "screenshots": 5,
+  "pageErrors": [],
+  "mobileHorizontalOverflow": false,
+  "configuration": {
+    "languages": [
+      {
+        "code": "hi",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "en",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "mr",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "bn",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "gu",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "pa",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "ta",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "te",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "kn",
+        "templates": true,
+        "reviewed": false
+      },
+      {
+        "code": "ml",
+        "templates": true,
+        "reviewed": false
+      }
+    ],
+    "stt": "mock",
+    "tts": "mock",
+    "ocr": "rapidocr",
+    "sample_rate": 24000,
+    "max_image_bytes": 10485760,
+    "max_audio_bytes": 6291456,
+    "data_sources": {
+      "brands": {
+        "as_of": "2026-11-12",
+        "source": "DEV FIXTURE: approximate MRPs, not verified - replace with your brand DB",
+        "rows": 39
+      },
+      "banned_fdc": {
+        "as_of": "2026-11-12",
+        "source": "DEV FIXTURE: one synthetic entry - load the official notifications",
+        "rows": 1
+      },
+      "price_ref": {
+        "as_of": "2026-10-01",
+        "source": "DEV FIXTURE: PMBJP / NPPA values are placeholders",
+        "rows": 15
+      },
+      "nsq_alerts": {
+        "as_of": "2026-11-12",
+        "source": "DEV FIXTURE: one synthetic batch",
+        "rows": 1
+      }
+    }
+  },
+  "synthetic_samples": true,
+  "live_voice_tested": false
+}

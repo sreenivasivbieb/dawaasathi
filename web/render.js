@@ -26,6 +26,7 @@ const num = (n) => (n == null ? "" : Number.isInteger(+n) ? String(+n) : String(
 export const rupee = (n) =>
   n == null ? "" : "₹" + Number(n).toLocaleString("en-IN", {
     minimumFractionDigits: Number.isInteger(+n) ? 0 : 2, maximumFractionDigits: 2 });
+const sourceLabel = (value, lang) => /fixture|synthetic|placeholder/i.test(value || "") ? t(lang, "demo_notice") : value;
 const titleCase = (s) => String(s || "").replace(/(^|[\s(/-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
 
 /** Mirrors SaltDose.label() in app/models.py. */
@@ -49,7 +50,7 @@ export function fmtDate(iso, lang) {
   } catch { return String(iso); }
 }
 
-/** Bilingual label: primary in UI language, small English sub-label when the UI isn't English. */
+/** Label in the selected interface language. */
 export function L(lang, key, vars) {
   const s = sub(lang, key, vars);
   return html`<span class="lbl">${t(lang, key, vars)}</span>${s ? html`<span class="en">${s}</span>` : ""}`;
@@ -104,7 +105,7 @@ function head(r, lang) {
   const card = r.card || { color: "amber", icon: "question" };
   const key = titleKey(r);
   const title = verdictTitle(lang, key);
-  const en = lang === "en" ? "" : verdictTitle("en", key);
+  const en = "";
   const shapeName = SHAPES[card.icon] ? card.icon : "question";
   return html`<header class="card__head">
     <span class="shape" role="img" aria-label="${t(lang, "shape_" + shapeName)}">${raw(SHAPES[shapeName])}</span>
@@ -216,7 +217,7 @@ function safetySec(r, lang) {
     <dl class="meta">
       ${notif ? html`<div><dt>${t(lang, "notification")}</dt><dd>${notif}</dd></div>` : ""}
       ${s.list_as_of ? html`<div><dt>${t(lang, "list_as_of")}</dt><dd>${fmtDate(s.list_as_of, lang)}</dd></div>` : ""}
-      ${s.source ? html`<div><dt>${t(lang, "source")}</dt><dd>${s.source}</dd></div>` : ""}
+      ${s.source ? html`<div><dt>${t(lang, "source")}</dt><dd>${sourceLabel(s.source, lang)}</dd></div>` : ""}
     </dl></section>`;
 }
 
@@ -234,17 +235,12 @@ function priceSec(r, lang) {
     ${p.ratio != null && p.reference != null ? html`<p class="price__ratio">${t(lang, "ratio", { x: num(p.ratio) })}</p>` : ""}
     ${p.above_ceiling === true ? html`<p class="statusline tone-warn">${glyph("warn")}<span>${L(lang, "above_ceiling")}</span></p>` : ""}
     ${p.stale ? html`<p class="small muted">${t(lang, "stale")}</p>` : ""}
-    ${p.reference_name || p.source ? html`<p class="src">${[p.reference_name, p.source, fmtDate(p.as_of, lang)].filter(Boolean).join(" · ")}</p>` : ""}
+    ${p.reference_name || p.source ? html`<p class="src">${[p.reference_name, sourceLabel(p.source, lang), fmtDate(p.as_of, lang)].filter(Boolean).join(" · ")}</p>` : ""}
   </section>`;
 }
 
-function unitPrice(a) {
-  if (a.unit_price != null) return a.unit_price;
-  return a.pack_qty ? a.price / a.pack_qty : a.price;
-}
-
 function altsSec(r, lang) {
-  const alts = (r.alternatives || []).slice().sort((a, b) => unitPrice(a) - unitPrice(b)).slice(0, 3);
+  const alts = (r.alternatives || []).slice(0, 3);
   if (!alts.length) return "";
   const item = targetItem(r) || {};
   const unit = packUnit(lang, item.pack_unit, item.form);
@@ -253,7 +249,7 @@ function altsSec(r, lang) {
       <div class="alt__top"><span class="alt__name">${a.name}</span>${a.is_jan_aushadhi ? html`<span class="badge badge--ja">${t(lang, "ja_badge")}</span>` : ""}</div>
       <div class="alt__mid"><span class="alt__price">${rupee(a.price)}</span>${a.pack_qty ? html`<span class="alt__qty">${t(lang, "for_qty", { qty: num(a.pack_qty), unit })}</span>` : ""}
         ${a.saves_pct ? html`<span class="badge badge--save">${t(lang, "saves", { n: a.saves_pct })}</span>` : ""}</div>
-      <div class="src">${[a.source, fmtDate(a.as_of, lang)].filter(Boolean).join(" · ")}</div>
+      <div class="src">${[sourceLabel(a.source, lang), fmtDate(a.as_of, lang)].filter(Boolean).join(" · ")}</div>
     </li>`)}
   </ol></section>`;
 }
@@ -289,29 +285,29 @@ function flagsSec(r, lang) {
         : WARN_FLAGS.has(f.code) || f.code.endsWith("_MISMATCH") ? "warn" : "info";
       const detail = flagDetail(f, lang);
       return html`<li class="flag tone-${tone}">${glyph(tone)}<span><span class="flag__lbl">${flagLabel(lang, f.code)}</span>
-        ${lang !== "en" ? html`<span class="en">${flagLabel("en", f.code)}</span>` : ""}
+
         ${detail ? html`<span class="flag__detail">${detail}</span>` : ""}</span></li>`;
     })}
   </ul></section>`;
 }
 
-function audioRow(r, lang) {
+function audioRow(r, lang, compact = false) {
   const hasAudio = r.audio_stream_url || r.script?.text;
   if (!hasAudio) return "";
   return html`<div class="audio-row">
     <button class="btn btn--primary" type="button" data-act="replay">${icon("play")}${L(lang, "replay")}</button>
     <button class="btn" type="button" data-act="stop-audio" aria-label="${t(lang, "stop")}">${icon("stop")}<span class="lbl">${t(lang, "stop")}</span></button>
-    ${r.audio_url && r.tts === "timbre" ? html`<a class="btn btn--ghost" href="${r.audio_url}" download="dawa-saathi-reply.ogg">${icon("down")}<span class="lbl">${t(lang, "download")}</span></a>` : ""}
+    ${!compact && r.audio_url && r.tts === "timbre" ? html`<a class="btn btn--ghost" href="${r.audio_url}" download="dawa-saathi-reply.ogg">${icon("down")}<span class="lbl">${t(lang, "download")}</span></a>` : ""}
   </div>
-  ${r.tts !== "timbre" ? html`<p class="small muted">${t(lang, "mock_audio")}${r.audio_url ? html` · <a href="${r.audio_url}" download="dawa-saathi-reply.ogg">.ogg</a>` : ""}</p>` : ""}`;
+  ${!compact && r.tts !== "timbre" ? html`<p class="small muted">${t(lang, "mock_audio")}${r.audio_url ? html` · <a href="${r.audio_url}" download="dawa-saathi-reply.ogg">.ogg</a>` : ""}</p>` : ""}`;
 }
 
-function replySec(r, lang) {
+function replySec(r, lang, compact = false) {
   const text = r.script?.text;
   if (!text && !r.audio_stream_url) return "";
   return html`<section class="sec reply"><h3>${L(lang, "reply")}</h3>
     ${text ? html`<p class="reply__text" lang="${r.lang || lang}">${text}</p>` : ""}
-    ${audioRow(r, lang)}</section>`;
+    ${audioRow(r, lang, compact)}</section>`;
 }
 
 function chemistSec(r, lang, o) {
@@ -360,6 +356,21 @@ export function renderResult(r, o = {}) {
     return html`<article class="card card--${color} card--phone" aria-labelledby="verdict-title">
       ${head(r, lang)}${replyAudioOnly(r, lang)}${foot(lang)}</article>`;
   }
+  if (o.compact) {
+    const hasDetails = Object.keys(r.items || {}).length || r.price;
+    return html`<article class="card card--${color}" aria-labelledby="verdict-title">
+      ${head(r, lang)}
+      ${said(r, lang)}
+      ${confirmSec(r, lang, o)}${needsImageSec(r, lang)}${errorSec(r, lang)}
+      ${replySec(r, lang, true)}${flagsSec(r, lang)}${safetySec(r, lang)}
+      ${r.mode === "compare" ? itemsSec(r, lang) : ""}
+      ${altsSec(r, lang)}
+      ${hasDetails ? html`<details class="result-details"><summary>${t(lang, "medicine")} · ${t(lang, "salts")} · ${t(lang, "price")}</summary>
+        ${r.mode === "compare" ? "" : itemsSec(r, lang)}${priceSec(r, lang)}</details>` : ""}
+      ${chemistSec(r, lang, o)}
+      ${Object.keys(r.data_sources || {}).length ? html`<details class="result-details"><summary>${t(lang, "data")}</summary>${renderDataSources(r.data_sources, lang)}</details>` : ""}
+    </article>`;
+  }
   return html`<article class="card card--${color}" aria-labelledby="verdict-title">
     ${head(r, lang)}
     ${said(r, lang)}
@@ -390,7 +401,7 @@ export function renderError(err, lang) {
   const key = code && t(lang, "err_" + code) !== "err_" + code ? "err_" + code : code === "NETWORK" ? "err_network" : "err_generic";
   return html`<article class="card card--amber" aria-labelledby="verdict-title">
     ${head({ status: "error", card: { color: "amber", icon: "question" } }, lang)}
-    <section class="sec err"><p>${L(lang, key)}</p>${code ? html`<p class="small muted">${code}${err.message ? " · " + err.message : ""}</p>` : ""}</section>
+    <section class="sec err"><p>${L(lang, key)}</p></section>
     ${foot(lang)}</article>`;
 }
 
@@ -403,11 +414,11 @@ export function renderModes(cfg) {
 
 /** The "Data" footer: as_of + source for each dataset. */
 export function renderDataSources(ds, lang) {
-  const names = { brands: "Brands", banned_fdc: "Banned FDC list", price_ref: "Price reference (Jan Aushadhi / NPPA)", nsq_alerts: "NSQ alerts" };
+  const names = { brands: t(lang, "medicine"), banned_fdc: t(lang, "safety"), price_ref: t(lang, "ref_price"), nsq_alerts: t(lang, "flags") };
   const rows = Object.entries(ds || {}).filter(([k, v]) => v && typeof v === "object" && names[k]);
   if (!rows.length) return html`<p class="small muted">—</p>`;
   return html`<dl class="data-list">${rows.map(([k, v]) => html`<div><dt>${names[k]}</dt>
-    <dd><span class="data-asof">${t(lang, "data_as_of")}: ${fmtDate(v.as_of, lang) || "—"}</span>${v.rows != null ? html` · ${v.rows} rows` : ""}<br><span class="src">${v.source || ""}</span></dd></div>`)}</dl>`;
+    <dd><span class="data-asof">${t(lang, "data_as_of")}: ${fmtDate(v.as_of, lang) || "—"}</span><br><span class="src">${/fixture|synthetic|placeholder/i.test(v.source || "") ? t(lang, "demo_notice") : v.source || ""}</span></dd></div>`)}</dl>`;
 }
 
 /** Debug drawer: timings of the last response and the OCR provider. */

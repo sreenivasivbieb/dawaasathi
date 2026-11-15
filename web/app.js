@@ -1,874 +1,772 @@
-// Momo · Dawaa Saathi Web Client
-// Real-time integration with FastAPI backend (/v1/query, /v1/stream, /v1/speak, /v1/alternatives, etc.)
-
 import {
-  Mic, Vad, encodeWav, streamPcm, speakText, unlockAudio, StreamPlayer, PcmDecoder, fetchPcm, playSamples,
+  Mic,
+  Vad,
+  encodeWav,
+  streamPcm,
+  speakText,
+  unlockAudio,
 } from "./audio.js";
-import { LANGS, LANG_NAMES, t, sub } from "./i18n.js";
-import {
-  renderResult, renderError, renderModes, renderDataSources, renderDebug,
-  targetSalts, targetItem, saltLabel, rupee, fmtDate, esc,
-} from "./render.js";
-import { LiveLink } from "./live.js";
+import { LANGS, LANG_NAMES, t } from "./i18n.js";
+import { renderResult, renderError, esc } from "./render.js";
 
 const $ = (id) => document.getElementById(id);
-
-// ------------------------------------------------------------------ Persisted State
-const store = {
-  get(k, d) {
+const storage = {
+  get(key, fallback) {
     try {
-      const v = localStorage.getItem("momo." + k) ?? localStorage.getItem("dawa." + k);
-      return v == null ? d : JSON.parse(v);
+      return (
+        JSON.parse(
+          localStorage.getItem("momo." + key) ??
+            localStorage.getItem("dawa." + key) ??
+            "null",
+        ) ?? fallback
+      );
     } catch {
-      return d;
+      return fallback;
     }
   },
-  set(k, v) {
+  set(key, value) {
     try {
-      localStorage.setItem("momo." + k, JSON.stringify(v));
-    } catch { /* private mode */ }
+      localStorage.setItem("momo." + key, JSON.stringify(value));
+    } catch {
+      /* Browser storage may be disabled. */
+    }
   },
 };
-
+const savedLang = storage.get("lang", navigator.language.slice(0, 2));
 const state = {
-  lang: LANGS.includes(store.get("lang")) ? store.get("lang") : guessLang(),
-  sessionId: store.get("session", null),
-  threads: store.get("threads", []),
-  pouch: store.get("pouch", []),
-  phone: false,
-  live: null,
+  lang: LANGS.includes(savedLang) ? savedLang : "en",
+  session: storage.get("session", null),
+  threads: storage.get("threads", []),
   photos: { strip: null, rx: null },
+  urls: [],
+  messages: [],
   last: null,
-  turns: [],
-  chemistOpen: false,
-  audio: null,
   cfg: null,
   busy: false,
-  callActive: false,
-  callSeconds: 83, // Starts at 01:23 matching the screenshot
-  callTimerInterval: null,
+  audio: null,
+  speaking: false,
+  autoSpeak: storage.get("autoSpeak", true),
+  voiceConversation: false,
+  chemistOpen: false,
+  fresh: false,
+  statusKey: null,
+  connectionKey: null,
+  lastError: null,
+  historyThreads: [],
 };
-
-function guessLang() {
-  const nav = (navigator.language || "en").slice(0, 2).toLowerCase();
-  return LANGS.includes(nav) ? nav : "en";
-}
-
-// ------------------------------------------------------------------ UI Helpers & Toast
-let toastTimer = 0;
-function toast(msg) {
-  const el = $("toast");
-  if (!el) return;
-  el.textContent = msg;
-  el.hidden = false;
+if (!Array.isArray(state.threads)) state.threads = [];
+state.threads = state.threads
+  .filter((id) => typeof id === "string" && /^s_[a-f0-9]{12,24}$/.test(id))
+  .slice(0, 50);
+const emptyResult = $("result").innerHTML;
+let toastTimer;
+function toast(key) {
+  state.toastKey = key;
+  $("toast").textContent = t(state.lang, key);
+  $("toast").hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 3500);
+  toastTimer = setTimeout(() => {
+    $("toast").hidden = true;
+  }, 5000);
 }
-
-// ------------------------------------------------------------------ Soundwave Waveform Animation
-let wavePhase = 0;
-function animateSoundwave() {
-  const path = $("soundwave-path");
-  if (path) {
-    const isLively = state.busy || state.callActive || $("mic")?.dataset?.state === "speaking" || $("mic")?.dataset?.state === "recording";
-    const amp = isLively ? 12 : 2.5;
-    const freq = isLively ? 0.038 : 0.015;
-    wavePhase += isLively ? 0.12 : 0.03;
-    let d = "M 0 24 ";
-    for (let x = 0; x <= 320; x += 10) {
-      const envelope = Math.sin((x / 320) * Math.PI);
-      const y = 24 + Math.sin(x * freq + wavePhase) * amp * envelope;
-      d += `L ${x} ${y.toFixed(1)} `;
-    }
-    path.setAttribute("d", d);
-  }
-  requestAnimationFrame(animateSoundwave);
-}
-
-// ------------------------------------------------------------------ Call Timer & State
-function formatTimer(totalSecs) {
-  const mins = Math.floor(totalSecs / 60);
-  const secs = totalSecs % 60;
-  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
-function startCallTimer() {
-  if (state.callTimerInterval) clearInterval(state.callTimerInterval);
-  state.callActive = true;
-  $("call-status").textContent = "Connected";
-  $("receptionist-card")?.classList.add("in-call");
-  state.callTimerInterval = setInterval(() => {
-    state.callSeconds++;
-    const formatted = formatTimer(state.callSeconds);
-    $("call-timer").textContent = formatted;
-    const durEl = $("audio-pill-duration");
-    if (durEl) durEl.textContent = formatted;
-  }, 1000);
-}
-
-function stopCallTimer() {
-  if (state.callTimerInterval) clearInterval(state.callTimerInterval);
-  state.callTimerInterval = null;
-  state.callActive = false;
-  $("call-status").textContent = "Ready";
-  $("receptionist-card")?.classList.remove("in-call");
-}
-
-function setMicState(s) {
-  const mic = $("mic");
-  if (mic) {
-    mic.dataset.state = s;
-    if (s === "recording") {
-      mic.classList.add("recording");
-      $("call-status").textContent = "Listening…";
-      startCallTimer();
-    } else {
-      mic.classList.remove("recording");
-    }
-  }
-
-  const orb = $("receptionist-orb");
-  if (orb) {
-    orb.dataset.state = s;
-  }
-
-  const statusLabel = $("mic-status");
-  if (statusLabel) {
-    statusLabel.textContent = s;
-  }
-
-  if (s === "thinking") {
-    $("call-status").textContent = "Analyzing…";
-  } else if (s === "speaking") {
-    $("call-status").textContent = "Speaking…";
-  } else if (s === "idle" && !state.callActive) {
-    $("call-status").textContent = "Ready";
-  }
-}
-
-// ------------------------------------------------------------------ Audio Playback
-function stopAudio() {
-  try { state.audio?.stop(); } catch { /* stopped */ }
-  state.audio = null;
-  if ($("mic")?.dataset?.state === "speaking") {
-    setMicState(state.live ? "live" : "idle");
-  }
-}
-
-function playResponse(r) {
-  stopAudio();
-  const text = r.script?.speech_text || r.script?.text;
-  const onstart = () => {
-    setMicState("speaking");
-    startCallTimer();
-  };
-  const onend = () => {
-    if (state.audio) state.audio = null;
-    setMicState(state.live ? "live" : "idle");
-  };
-
-  if (r.tts === "timbre" && r.audio_stream_url) {
-    state.audio = streamPcm(r.audio_stream_url, { onstart, onended: onend, onerror: onend });
-  } else if (text) {
-    state.audio = speakText(text, r.lang || state.lang, { onstart, onend });
-  }
-}
-
-// ------------------------------------------------------------------ Server Calls
 async function api(path, { form, json, method } = {}) {
-  let res;
+  let response;
   try {
-    res = await fetch(path, {
+    response = await fetch(path, {
       method: method || (form || json ? "POST" : "GET"),
-      body: form || (json ? JSON.stringify(json) : undefined),
       headers: json ? { "Content-Type": "application/json" } : undefined,
+      body: form || (json ? JSON.stringify(json) : undefined),
     });
   } catch {
-    throw { code: "NETWORK", message: "Network connection failure" };
+    throw {
+      code: "NETWORK",
+      message: t(state.lang, "err_network"),
+    };
   }
-  let body = null;
-  try { body = await res.json(); } catch { /* ignore */ }
-  if (!res.ok) throw body?.error || { code: `HTTP_${res.status}`, message: "Server error" };
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw {
+      code: "INVALID_RESPONSE",
+      message: t(state.lang, "err_generic"),
+    };
+  }
+  if (!response.ok)
+    throw (
+      body.error || {
+        code: "HTTP_" + response.status,
+        message: t(state.lang, "err_generic"),
+      }
+    );
   return body;
 }
-
-function showError(err) {
-  setMicState(state.live ? "live" : "idle");
-  toast(err?.message || err?.code || "Something went wrong.");
-  const resEl = $("result");
-  if (resEl) resEl.innerHTML = String(renderError(err, state.lang));
+function showError(error) {
+  state.lastError = error;
+  $("result-status").hidden = false;
+  $("request-error").hidden = false;
+  $("request-error").innerHTML = String(renderError(error, state.lang));
+  setStatus("err_title");
 }
-
-// ------------------------------------------------------------------ Main Query Handler
-async function ask({ text, wav, label, photos: customPhotos }) {
-  if (state.busy) return;
-  const photos = customPhotos || { ...state.photos };
-  if (!text && !wav && !photos.strip && !photos.rx) {
-    toast("Please enter a question, speak, or upload a photo.");
-    return;
+function clearError() {
+  state.lastError = null;
+  $("request-error").hidden = true;
+  $("request-error").innerHTML = "";
+}
+function setBusy(busy) {
+  state.busy = busy;
+  document.querySelector(".results").setAttribute("aria-busy", String(busy));
+  document
+    .querySelectorAll(
+      "#ask button, #result button, #btn-new, #btn-history, #lang, [data-thread-open], [data-thread-delete]",
+    )
+    .forEach((el) => {
+      el.disabled = busy;
+    });
+  $("mic").disabled = busy || state.cfg?.stt !== "prisma";
+  $("q").disabled = busy;
+  if (busy) {
+    $("result-status").hidden = false;
+    setStatus("mic_thinking");
   }
-
-  state.busy = true;
-  stopAudio();
-  setMicState("thinking");
-
-  const fd = new FormData();
-  fd.set("lang", state.lang);
-  fd.set("channel", state.phone ? "phone" : "web");
-  if (state.sessionId) fd.set("session_id", state.sessionId);
-  if (state.pouch.length) fd.set("pouch", JSON.stringify(state.pouch));
-  if (text) fd.set("text", text);
-  if (wav) fd.set("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
-  if (photos.strip) fd.set("strip", photos.strip, photos.strip.name || "strip.jpg");
-  if (photos.rx) fd.set("rx", photos.rx, photos.rx.name || "rx.jpg");
-
-  try {
-    const r = await api("/v1/query", { form: fd });
-    rememberThread(r.session_id);
-    clearPhotos();
-    state.last = r;
-
-    const attachments = [wav && "audio", photos.strip && "strip", photos.rx && "rx"].filter(Boolean);
-    const userText = text || label || r.transcript || (attachments.length ? `[${attachments.join(", ")}]` : "");
-
-    // Push new dialogue turn
-    pushTurn(userText, attachments, r);
-
-    // Update structured clinic record & play voice
-    updateClinicRecord(r);
-    playResponse(r);
-  } catch (err) {
-    showError(err);
-  } finally {
-    state.busy = false;
-    if ($("mic")?.dataset?.state === "thinking") {
-      setMicState(state.live ? "live" : "idle");
-    }
-  }
+  renderMic();
 }
-
-// ------------------------------------------------------------------ Transcript & Clinic Record Rendering
-function getCurrentTimeFormatted() {
-  const now = new Date();
-  return now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+function remember(id) {
+  state.session = id;
+  storage.set("session", id);
+  state.threads = [id, ...state.threads.filter((x) => x !== id)].slice(0, 50);
+  storage.set("threads", state.threads);
 }
-
-function createChatRow(role, name, time, text, audioUrl) {
-  const isMR = role === "mr";
-  const avatarClass = isMR ? "mr" : "p";
-  const avatarText = isMR ? "MR" : "P";
-  const audioBtn = (isMR && text) ? `
-    <button class="chat-bubble-audio-btn" type="button" data-play-text="${esc(text)}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      <span>Listen</span>
-    </button>
-  ` : "";
-
-  return `
-    <div class="chat-bubble-row ${isMR ? "receptionist" : "patient"}">
-      <div class="chat-avatar ${avatarClass}">${avatarText}</div>
-      <div class="chat-bubble-content">
-        <div class="chat-bubble-meta">
-          <span class="chat-sender-name">${esc(name)}</span>
-          <span class="chat-time">${esc(time)}</span>
-        </div>
-        <p class="chat-bubble-text">${esc(text)}</p>
-        ${audioBtn}
-      </div>
-    </div>
-  `;
+function renderCurrent() {
+  $("result").innerHTML = state.last
+    ? String(
+        renderResult(state.last, {
+          lang: state.lang,
+          sessionId: state.session,
+          compact: true,
+          chemistOpen: state.chemistOpen,
+        }),
+      )
+    : emptyResult;
 }
-
-function renderThread() {
-  const container = $("thread");
-  if (!container) return;
-
-  if (state.turns.length === 0) {
-    // Initial seeded conversation matching the theme screenshot
-    container.innerHTML = `
-      ${createChatRow("patient", "Patient", "02:32", "Hi, I'd like to reschedule my appointment to next Friday and check my prescription for Augmentin 625 Duo.")}
-      ${createChatRow("mr", "Momo Receptionist", "02:33", "Of course. Can I confirm you'd like next Friday at 10:00 AM? Also, Augmentin 625 Duo contains Amoxicillin 500 mg and Clavulanic Acid 125 mg. A Jan Aushadhi generic alternative is available for ₹62, saving about 72%.")}
-    `;
-    return;
-  }
-
-  container.innerHTML = state.turns.map((turn) => {
-    const userRow = turn.user ? createChatRow("patient", "Patient", turn.time || "Now", turn.user) : "";
-    const resp = turn.response || {};
-    const mrText = resp.script?.text || resp.card?.title || "";
-    const mrRow = mrText ? createChatRow("mr", "Momo Receptionist", turn.time || "Now", mrText, resp.audio_url) : "";
-    return userRow + mrRow;
-  }).join("");
-
-  container.scrollTop = container.scrollHeight;
+function renderMessages() {
+  $("conversation").hidden = !state.messages.length;
+  $("thread").innerHTML = state.messages.length
+    ? state.messages
+        .map(
+          (m) =>
+            `<div class="thread-row"><strong>${esc(m.role === "user" ? t(state.lang, "you_said") : t(state.lang, "reply"))}</strong><p>${esc(m.text || (m.attachments || []).map((a) => t(state.lang, a === "audio" ? "attached_audio" : "attached_photo")).join(" · "))}</p></div>`,
+        )
+        .join("")
+    : `<p class="hint">${esc(t(state.lang, "history_empty"))}</p>`;
 }
-
-function pushTurn(user, attachments, response) {
-  state.turns.push({
-    user,
-    attachments,
-    response,
-    time: getCurrentTimeFormatted(),
+function receive(response, user) {
+  remember(response.session_id);
+  state.last = response;
+  state.fresh = true;
+  state.chemistOpen = false;
+  if (user)
+    state.messages.push({ role: "user", text: response.transcript || user });
+  state.messages.push({
+    role: "assistant",
+    text: response.script?.text || response.card?.title || response.status,
   });
-  renderThread();
+  renderCurrent();
+  renderMessages();
+  $("result-status").hidden = false;
+  setStatus(
+    response.status === "needs_confirmation"
+      ? "confirm_q"
+      : response.status === "needs_image"
+        ? "photo_hint"
+        : response.status === "error"
+          ? "err_title"
+          : "reply",
+  );
 }
-
-function updateClinicRecord(r) {
-  const it = targetItem(r);
-  const m = r.match;
-  const p = r.price;
-  const s = r.safety;
-  const alts = r.alternatives || [];
-
-  // Update Medicine Name & Salts
-  const medNameEl = $("field-med-name");
-  const medSaltsEl = $("field-med-salts");
-  const medMrpEl = $("field-med-mrp");
-  const medGenericEl = $("field-med-generic");
-  const medSavingsEl = $("field-med-savings");
-
-  const brandName = m?.brand || it?.brand || "Medicine identified";
-  if (medNameEl) medNameEl.textContent = brandName;
-
-  const saltsString = it?.salts?.length
-    ? it.salts.map(saltLabel).join(" + ")
-    : "Verified chemical composition";
-  if (medSaltsEl) medSaltsEl.textContent = saltsString;
-
-  // Prices
-  const mrpVal = p?.mrp ?? it?.mrp;
-  if (medMrpEl) {
-    medMrpEl.textContent = mrpVal ? `MRP ${rupee(mrpVal)}` : "MRP —";
+async function ask({ text = $("q").value.trim(), wav } = {}) {
+  if (state.busy || rec.on) return;
+  if (!text && !wav && !state.photos.strip && !state.photos.rx) {
+    $("q").focus();
+    return;
   }
-
-  const bestAlt = alts[0];
-  if (bestAlt && medGenericEl) {
-    medGenericEl.textContent = `Jan Aushadhi: ${rupee(bestAlt.price)}`;
-    if (medSavingsEl) {
-      medSavingsEl.textContent = bestAlt.saves_pct ? `Save ${bestAlt.saves_pct}%` : "Generic Equivalent";
-      medSavingsEl.hidden = false;
+  stopAudio();
+  clearError();
+  setBusy(true);
+  const form = new FormData();
+  form.set("lang", state.lang);
+  form.set("channel", "web");
+  if (state.session) form.set("session_id", state.session);
+  if (text) form.set("text", text);
+  if (wav) form.set("detect_language", "true");
+  if (wav)
+    form.set("audio", new Blob([wav], { type: "audio/wav" }), "speech.wav");
+  for (const [kind, file] of Object.entries(state.photos))
+    if (file) form.set(kind, file, file.name);
+  const label =
+    text ||
+    (wav
+      ? t(state.lang, "attached_audio")
+      : Object.entries(state.photos)
+          .filter(([, f]) => f)
+          .map(([kind]) => t(state.lang, kind + "_photo"))
+          .join(" + "));
+  try {
+    const response = await api("/v1/query", { form });
+    receive(response, label);
+    state.voiceConversation = !!wav;
+    if (state.autoSpeak) playResponse(response);
+    openHistory(true);
+    // Preserve typed input and attachments when the pipeline itself reports a failure.
+    if (response.status !== "error") {
+      $("q").value = "";
+      clearPhotos();
     }
-  } else if (p?.reference && medGenericEl) {
-    medGenericEl.textContent = `Jan Aushadhi: ${rupee(p.reference)}`;
-    if (medSavingsEl) {
-      medSavingsEl.textContent = "Generic Reference";
-      medSavingsEl.hidden = false;
-    }
-  } else if (medGenericEl) {
-    medGenericEl.textContent = "Verified Formulation";
-    if (medSavingsEl) medSavingsEl.hidden = true;
-  }
-
-  // Patient Note
-  const noteEl = $("field-patient-note");
-  if (noteEl) {
-    noteEl.textContent = r.script?.text || "Consultation complete. Details prepared for clinic review.";
-  }
-
-  // Visit Reason / Clinical Tags
-  const tagsEl = $("field-tag-chips");
-  if (tagsEl) {
-    const tags = [];
-    const lowerSalts = (it?.salts || []).map((x) => x.name.toLowerCase());
-
-    if (lowerSalts.some((x) => x.includes("amoxicillin") || x.includes("clavulanic"))) {
-      tags.push("Respiratory issue", "Persistent cough", "Bacterial infection");
-    } else if (lowerSalts.some((x) => x.includes("paracetamol"))) {
-      tags.push("Fever & pain relief", "Antipyretic");
-    } else if (lowerSalts.some((x) => x.includes("ibuprofen"))) {
-      tags.push("Anti-inflammatory", "Pain management");
-    } else if (lowerSalts.some((x) => x.includes("metformin") || x.includes("glimepiride"))) {
-      tags.push("Endocrine care", "Blood glucose control");
-    } else {
-      tags.push("General consultation", "Prescription review");
-    }
-
-    if (bestAlt) tags.push("Generic substitute verified");
-    if (s?.status === "not_listed") tags.push("Safe non-banned FDC");
-
-    tagsEl.innerHTML = tags.map((t, idx) => `
-      <span class="tag-chip ${idx >= tags.length - 2 ? "active-safe" : ""}">${esc(t)}</span>
-    `).join("");
-  }
-
-  // Safety Status
-  const safetyRow = $("field-safety-row");
-  const safetyText = $("field-safety-text");
-  if (safetyRow && safetyText) {
-    if (s?.status === "banned") {
-      safetyRow.className = "safety-verify-row banned";
-      safetyText.textContent = `⚠ BANNED by Ministry of Health (${s.notification_ref || "Gazette order"})`;
-    } else if (s?.status === "possible") {
-      safetyRow.className = "safety-verify-row warning";
-      safetyText.textContent = `⚠ Review Needed: Resembles banned combination`;
-    } else {
-      safetyRow.className = "safety-verify-row safe";
-      safetyText.textContent = "Verified Safe · Not listed on Central Banned FDC gazette";
-    }
-  }
-
-  // Appointment Times
-  const d = new Date();
-  const nextWeek = new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const opt = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
-  const updatedTimeEl = $("field-updated-time");
-  const prevTimeEl = $("field-prev-time");
-  if (updatedTimeEl) updatedTimeEl.textContent = `${nextWeek.toLocaleDateString("en-US", opt)} • 10:00 AM`;
-  if (prevTimeEl) prevTimeEl.textContent = `${d.toLocaleDateString("en-US", opt)} • 10:00 AM`;
-
-  // Status Badge
-  const statusBadge = $("clinic-status-text");
-  if (statusBadge) statusBadge.textContent = "Draft ready to review";
-
-  // Debug & fallback rendering
-  const debugBody = $("debug-body");
-  if (debugBody) debugBody.innerHTML = String(renderDebug(r));
-  const resEl = $("result");
-  if (resEl) resEl.innerHTML = String(renderResult(r, { lang: state.lang, sessionId: state.sessionId }));
-}
-
-function rememberThread(id) {
-  if (!id) return;
-  state.sessionId = id;
-  store.set("session", id);
-  if (!state.threads.includes(id)) {
-    state.threads = [id, ...state.threads].slice(0, 50);
-    store.set("threads", state.threads);
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
   }
 }
-
-// ------------------------------------------------------------------ Tap-to-Talk (Mic)
-const mic = new Mic();
-const rec = { on: false, frames: [], vad: null, heard: false, ms: 0 };
-
-async function toggleRecording() {
+async function confirm(candidate, none = false) {
+  if (state.busy || !state.session) return;
+  stopAudio();
   unlockAudio();
-  if (rec.on) return finishRecording();
-  if ($("mic")?.dataset?.state === "speaking") stopAudio();
-
+  clearError();
+  setBusy(true);
+  try {
+    const choice = state.last?.candidates?.find(
+      (c) => c.candidate_id === candidate,
+    )?.label;
+    receive(
+      await api("/v1/confirm", {
+        json: {
+          session_id: state.session,
+          candidate_id: candidate || null,
+          none,
+          lang: state.voiceConversation
+            ? state.last?.lang || state.lang
+            : state.lang,
+        },
+      }),
+      choice || t(state.lang, "none_of_these"),
+    );
+    if (state.autoSpeak) playResponse(state.last);
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+function stopAudio() {
+  try {
+    state.audio?.stop();
+  } catch {
+    /* Already stopped. */
+  }
+  state.audio = null;
+  state.speaking = false;
+  renderMic();
+  if (state.session)
+    api("/v1/interrupt", { json: { session_id: state.session } }).catch(
+      () => {},
+    );
+}
+function playResponse(response) {
+  stopAudio();
+  unlockAudio();
+  const onstart = () => {
+    state.speaking = true;
+    renderMic();
+  };
+  const onend = () => {
+    state.speaking = false;
+    renderMic();
+  };
+  const readInBrowser = () => {
+    state.audio = speakText(
+      response.script?.speech_text || response.script?.text,
+      response.lang || state.lang,
+      { onstart, onend },
+    );
+  };
+  if (response?.tts === "timbre" && response.audio_stream_url) {
+    state.audio = streamPcm(response.audio_stream_url, {
+      onstart,
+      onended: onend,
+      onerror: () => {
+        onend();
+        toast("voice_fallback");
+        readInBrowser();
+      },
+    });
+  } else if (response?.script?.text) readInBrowser();
+}
+async function speakChemist() {
+  if (!state.last?.script?.chemist_text || state.busy) return;
+  unlockAudio();
+  stopAudio();
+  const lang = state.last.lang || state.lang;
+  const fallback = () =>
+    playResponse({ script: { text: state.last.script.chemist_text }, lang });
+  if (!state.fresh) {
+    fallback();
+    return;
+  }
+  try {
+    const response = await api("/v1/speak", {
+      json: { session_id: state.session, which: "chemist", lang },
+    });
+    playResponse({ ...response, script: { text: response.text }, lang });
+  } catch {
+    fallback();
+  }
+}
+const mic = new Mic();
+const rec = {
+  on: false,
+  starting: false,
+  epoch: 0,
+  frames: [],
+  heard: false,
+  ms: 0,
+  timer: null,
+};
+function renderMic() {
+  const connected = state.cfg?.stt === "prisma";
+  const phase = rec.on
+    ? "recording"
+    : rec.starting
+      ? "starting"
+      : state.speaking
+        ? "speaking"
+        : state.busy
+          ? "thinking"
+          : "idle";
+  $("voice-panel").dataset.state = phase;
+  $("mic").hidden = false;
+  $("mic").disabled = !connected || state.busy || rec.starting;
+  $("mic").dataset.state = phase;
+  $("mic").setAttribute("aria-pressed", String(rec.on));
+  $("mic").setAttribute(
+    "aria-label",
+    t(state.lang, rec.on ? "mic_aria_stop" : "mic_aria_start"),
+  );
+  $("voice-title").textContent = t(state.lang, "tagline");
+  $("mic-label").textContent = t(
+    state.lang,
+    rec.on
+      ? "mic_listening"
+      : state.speaking
+        ? "mic_speaking"
+        : state.busy
+          ? "mic_thinking"
+          : connected
+            ? "mic_idle"
+            : "err_STT_NOT_CONFIGURED",
+  );
+  $("voice-badge").textContent = t(state.lang, "voice_auto");
+  $("voice-badge").classList.toggle("connected", connected);
+  $("voice-setup").hidden = connected;
+  $("mic-status").hidden = false;
+  $("mic-status").textContent = t(
+    state.lang,
+    rec.on
+      ? "mic_listening"
+      : state.speaking
+        ? "mic_speaking"
+        : connected
+          ? "mic_hint"
+          : "err_STT_NOT_CONFIGURED",
+  );
+  $("voice-stop").textContent = t(state.lang, "stop");
+  $("lang").disabled = state.busy || rec.on || rec.starting;
+  $("voice-stop").hidden = !rec.on && !state.speaking;
+  $("send").disabled = state.busy || rec.on || rec.starting;
+}
+async function toggleRecording() {
+  if (rec.on) {
+    finishRecording();
+    return;
+  }
+  if (rec.starting || state.busy || state.cfg?.stt !== "prisma") return;
+  stopAudio();
+  unlockAudio();
+  const epoch = ++rec.epoch;
+  rec.starting = true;
+  renderMic();
   try {
     await mic.start(16000);
-  } catch (e) {
-    toast(e?.name === "NotAllowedError" ? "Microphone access denied." : "Microphone not supported.");
-    return;
+    if (epoch !== rec.epoch || document.hidden) {
+      mic.stop();
+      return;
+    }
+    Object.assign(rec, { on: true, frames: [], heard: false, ms: 0 });
+    const vad = new Vad();
+    mic.onframe = (pcm, rms, ms) => {
+      if (!rec.on) return;
+      rec.frames.push(pcm);
+      rec.ms += ms;
+      const event = vad.push(rms, ms);
+      if (event === "start") rec.heard = true;
+      if ((event === "end" && rec.heard) || rec.ms >= 20000) finishRecording();
+    };
+    rec.timer = setTimeout(finishRecording, 22000);
+    renderMic();
+  } catch (error) {
+    toast(error.name === "NotAllowedError" ? "mic_denied" : "mic_unsupported");
+  } finally {
+    if (epoch === rec.epoch) rec.starting = false;
+    renderMic();
   }
-
-  Object.assign(rec, { on: true, frames: [], vad: new Vad(), heard: false, ms: 0 });
-  mic.onframe = (pcm, rms, ms) => {
-    if (!rec.on) return;
-    rec.frames.push(pcm);
-    rec.ms += ms;
-    const ev = rec.vad.push(rms, ms);
-    if (ev === "start") rec.heard = true;
-    if ((ev === "end" && rec.heard) || rec.ms > 20000) finishRecording();
-  };
-  setMicState("recording");
 }
-
-function finishRecording() {
-  if (!rec.on) return;
+function cancelRecording() {
+  rec.epoch++;
+  rec.starting = false;
+  clearTimeout(rec.timer);
   rec.on = false;
   mic.onframe = null;
   mic.stop();
-  if (!rec.heard || rec.ms < 400) {
-    setMicState("idle");
-    toast("No speech heard. Please speak clearly.");
-    return;
-  }
-  const wav = encodeWav(rec.frames, mic.targetRate);
   rec.frames = [];
-  ask({ wav });
+  renderMic();
 }
-
-// ------------------------------------------------------------------ Image Uploads
+function finishRecording() {
+  if (!rec.on) return;
+  const wav =
+    rec.frames.length > 0 && rec.ms >= 400
+      ? encodeWav(rec.frames, mic.targetRate)
+      : null;
+  cancelRecording();
+  if (wav) ask({ text: "", wav });
+  else toast("no_speech");
+}
 function setPhoto(kind, file) {
+  if (
+    file &&
+    (![
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+    ].includes(file.type) ||
+      file.size > (state.cfg?.max_image_bytes || 10 * 1024 * 1024))
+  ) {
+    toast(
+      file.size > (state.cfg?.max_image_bytes || 10 * 1024 * 1024)
+        ? "err_TOO_LARGE"
+        : "err_UNSUPPORTED_MEDIA",
+    );
+    $("in-" + kind).value = "";
+    return;
+  }
   state.photos[kind] = file || null;
+  if (!file) $("in-" + kind).value = "";
   renderThumbs();
 }
-
 function clearPhotos() {
-  state.photos = { strip: null, rx: null };
-  const inStrip = $("in-strip");
-  const inRx = $("in-rx");
-  if (inStrip) inStrip.value = "";
-  if (inRx) inRx.value = "";
+  for (const kind of ["strip", "rx"]) {
+    state.photos[kind] = null;
+    $("in-" + kind).value = "";
+  }
   renderThumbs();
 }
-
 function renderThumbs() {
-  const container = $("thumbs");
-  if (!container) return;
-  const items = Object.entries(state.photos).filter(([, f]) => f);
-  container.innerHTML = items.map(([kind, f]) => `
-    <div class="attached-thumb-item">
-      <img src="${URL.createObjectURL(f)}" alt="${kind}">
-      <button class="btn-thumb-remove" type="button" data-act="remove-photo" data-kind="${kind}">✕</button>
-    </div>
-  `).join("");
-
-  const checkBtn = $("btn-check-photo");
-  if (checkBtn) checkBtn.hidden = !items.length;
+  state.urls.forEach((url) => URL.revokeObjectURL(url));
+  state.urls = [];
+  $("thumbs").innerHTML = Object.entries(state.photos)
+    .filter(([, file]) => file)
+    .map(([kind, file]) => {
+      const url = URL.createObjectURL(file);
+      state.urls.push(url);
+      return `<div class="thumb"><img src="${url}" alt="${esc(t(state.lang, kind + "_photo"))}"><span>${esc(file.name)}</span><button type="button" data-act="remove-photo" data-kind="${kind}" aria-label="${esc(t(state.lang, "remove") + " " + t(state.lang, kind + "_photo"))}">×</button></div>`;
+    })
+    .join("");
 }
-
-// ------------------------------------------------------------------ Samples & Presets
-async function triggerSample(sampleKey) {
-  unlockAudio();
-  if (sampleKey === "augmentin") {
-    ask({ text: "Augmentin 625 Duo price and generic" });
-  } else if (sampleKey === "dolo") {
-    ask({ text: "Dolo 650 price and indications" });
-  } else if (sampleKey === "combiflam") {
-    ask({ text: "Combiflam price and safety check" });
-  } else if (sampleKey === "rx-photo") {
-    toast("Loading sample prescription…");
-    try {
-      const res = await fetch("/samples/rx_augmentin_625.png");
-      const blob = await res.blob();
-      const file = new File([blob], "rx_augmentin_625.png", { type: "image/png" });
-      setPhoto("rx", file);
-      ask({ label: "Uploaded prescription for Augmentin 625 Duo" });
-    } catch {
-      toast("Could not load sample file.");
-    }
-  } else if (sampleKey === "strip-photo") {
-    toast("Loading sample medicine strip…");
-    try {
-      const res = await fetch("/samples/strip_augmentin_625.png");
-      const blob = await res.blob();
-      const file = new File([blob], "strip_augmentin_625.png", { type: "image/png" });
-      setPhoto("strip", file);
-      ask({ label: "Uploaded strip photo: Augmentin 625 Duo" });
-    } catch {
-      toast("Could not load sample file.");
-    }
-  }
+function renderHistory() {
+  const threads = state.historyThreads;
+  $("history-list").innerHTML = threads.length
+    ? threads
+        .map(
+          (thread) =>
+            `<li><span>${esc(thread.title || t(state.lang, "attached_photo"))}<small>${esc(new Date(thread.updated_at).toLocaleString(state.lang + "-IN"))} · ${esc(t(state.lang, "history_messages", { n: thread.messages }))}</small></span><button type="button" data-thread-open="${esc(thread.id)}">${esc(t(state.lang, "open"))}</button><button type="button" data-thread-delete="${esc(thread.id)}">${esc(t(state.lang, "history_delete"))}</button></li>`,
+        )
+        .join("")
+    : `<li>${esc(t(state.lang, "history_empty"))}</li>`;
 }
-
-// ------------------------------------------------------------------ Speak to Chemist
-async function openChemistModal() {
-  unlockAudio();
-  const modal = $("modal-chemist");
-  if (!modal) return;
-  modal.showModal();
-
-  const scriptTextEl = $("chemist-script-text");
-  if (state.last?.script?.chemist_text) {
-    if (scriptTextEl) scriptTextEl.textContent = `"${state.last.script.chemist_text}"`;
-  } else {
-    if (scriptTextEl) scriptTextEl.textContent = `"Do you have a Jan Aushadhi or cheaper generic of Amoxicillin 500 mg + Clavulanic Acid 125 mg (tablet)?"`;
-  }
-}
-
-async function playChemistAudio() {
-  unlockAudio();
-  if (!state.sessionId) {
-    const text = $("chemist-script-text")?.textContent?.replace(/^"|"$/g, "") || "Please check generic medicine.";
-    speakText(text, state.lang, {});
-    return;
-  }
+async function openHistory(refresh = false) {
+  if ((!refresh && state.busy) || rec.on) return;
+  if (!refresh) $("history").classList.add("is-open");
+  $("history-list").innerHTML = `<li>${esc(t(state.lang, "loading"))}</li>`;
   try {
-    const res = await api("/v1/speak", { json: { session_id: state.sessionId, which: "chemist", lang: state.lang } });
-    stopAudio();
-    if (res.tts === "timbre" && res.audio_stream_url) {
-      state.audio = streamPcm(res.audio_stream_url, {});
-    } else {
-      state.audio = speakText(res.text, state.lang, {});
-    }
-  } catch {
-    const text = $("chemist-script-text")?.textContent?.replace(/^"|"$/g, "") || "";
-    speakText(text, state.lang, {});
+    const { threads } = await api(
+      "/v1/threads?ids=" + encodeURIComponent(state.threads.join(",")),
+    );
+    state.historyThreads = threads;
+    renderHistory();
+  } catch (error) {
+    $("history-list").innerHTML =
+      `<li>${esc(t(state.lang, "err_generic"))}</li>`;
   }
 }
-
-// ------------------------------------------------------------------ Grievance Draft
-async function openGrievanceModal() {
-  const modal = $("modal-grievance");
-  if (!modal) return;
-  modal.showModal();
-
-  const bodyEl = $("grievance-body-text");
-  if (!state.sessionId) {
-    if (bodyEl) {
-      bodyEl.textContent = "Subject: Query about Augmentin 625 Duo\nMedicine: Augmentin 625 Duo Tablet (Amoxicillin 500mg + Clavulanic Acid 125mg)\nMRP: ₹223.40\nCeiling Reference: ₹62.00\nStatement: I request verification of the medicine price and compliance with NPPA ceiling rules.";
-    }
-    return;
-  }
-
+async function loadThread(id, close = true) {
+  if (state.busy) return;
+  setBusy(true);
+  clearError();
+  stopAudio();
   try {
-    const res = await api("/v1/grievance/draft", { json: { session_id: state.sessionId } });
-    const draft = res.draft;
-    const text = `Subject: ${draft.subject}\nStatement: ${draft.statement}\nMedicine: ${JSON.stringify(draft.medicine, null, 2)}\nChannel: ${res.channel_hint}\nWarning: ${res.warning}`;
-    if (bodyEl) bodyEl.textContent = text;
-  } catch {
-    if (bodyEl) bodyEl.textContent = "Grievance details will be populated from your recent consultation.";
-  }
-}
-
-// ------------------------------------------------------------------ Language Selection
-function fillLangSelect(sel) {
-  if (!sel) return;
-  sel.innerHTML = LANGS.map((l) => `<option value="${l}">${esc(LANG_NAMES[l])}</option>`).join("");
-  sel.value = state.lang;
-  sel.addEventListener("change", () => {
-    state.lang = sel.value;
-    store.set("lang", sel.value);
-    document.documentElement.lang = sel.value;
-    toast(`Language set to ${LANG_NAMES[sel.value] || sel.value}`);
-  });
-}
-
-// ------------------------------------------------------------------ Pouch & History
-function renderPouch() {
-  const countEl = $("pouch-count");
-  if (countEl) {
-    countEl.hidden = !state.pouch.length;
-    countEl.textContent = String(state.pouch.length);
-  }
-  const listEl = $("pouch-list");
-  if (listEl) {
-    listEl.innerHTML = state.pouch.length
-      ? state.pouch.map((s, i) => `
-        <li style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
-          <span style="font-weight: 500; font-size: 0.9rem;">${esc(s)}</span>
-          <button style="border: none; background: transparent; cursor: pointer; color: #ef4444; font-size: 1rem;" type="button" data-pouch-del="${i}">✕</button>
-        </li>
-      `).join("")
-      : `<li style="color: #94a3b8; font-size: 0.88rem; text-align: center; padding: 12px;">No medicines in personal pouch yet.</li>`;
-  }
-}
-
-function setPouch(list) {
-  state.pouch = [...new Set(list.map((s) => s.trim().toLowerCase()).filter(Boolean))].slice(0, 50);
-  store.set("pouch", state.pouch);
-  renderPouch();
-}
-
-async function openHistory() {
-  const modal = $("history");
-  if (!modal) return;
-  modal.showModal();
-  const listEl = $("history-list");
-  if (!listEl) return;
-  listEl.innerHTML = `<li style="color: #64748b; padding: 10px;">Loading conversations…</li>`;
-
-  try {
-    if (state.threads.length) {
-      const res = await api(`/v1/threads?ids=${encodeURIComponent(state.threads.join(","))}`);
-      const threads = res.threads || [];
-      listEl.innerHTML = threads.length ? threads.map((th) => `
-        <li style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="font-weight: 600; font-size: 0.92rem; color: #111a16;">${esc(th.title || "Consultation")}</div>
-            <div style="font-size: 0.75rem; color: #64748b;">${new Date(th.updated_at).toLocaleDateString()} · ${th.messages} messages</div>
-          </div>
-          <button class="btn-preset-chip" type="button" data-thread-open="${esc(th.id)}">Open</button>
-        </li>
-      `).join("") : `<li style="color: #94a3b8; padding: 12px;">No past consultations found.</li>`;
-    } else {
-      listEl.innerHTML = `<li style="color: #94a3b8; padding: 12px;">No past consultations found.</li>`;
-    }
-  } catch {
-    listEl.innerHTML = `<li style="color: #94a3b8; padding: 12px;">Could not load history.</li>`;
-  }
-}
-
-// ------------------------------------------------------------------ Event Binding
-function bindEvents() {
-  // Soundwave Animation Loop
-  animateSoundwave();
-
-  // Language selectors
-  fillLangSelect($("lang"));
-  fillLangSelect($("lang2"));
-
-  // Main Mic / Voice Button
-  $("mic")?.addEventListener("click", toggleRecording);
-
-  // Receptionist Orb tap
-  $("receptionist-orb")?.addEventListener("click", () => {
-    unlockAudio();
-    toggleRecording();
-  });
-
-  // End Call Button
-  $("btn-end-call")?.addEventListener("click", () => {
-    stopAudio();
-    if (rec.on) finishRecording();
-    stopCallTimer();
-    toast("Call ended.");
-  });
-
-  // Hero Book a Demo Button
-  $("btn-book-demo")?.addEventListener("click", () => {
-    unlockAudio();
-    startCallTimer();
-    toast("Starting live demo with Momo Receptionist…");
-    const greeting = "Hello! I am Momo, your AI healthcare receptionist. You can ask me about your prescriptions, find cheaper generic alternatives, or check drug safety. How can I help you today?";
-    speakText(greeting, state.lang, {
-      onstart: () => setMicState("speaking"),
-      onend: () => setMicState("idle"),
-    });
-  });
-
-  // Form Submit
-  $("ask")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    unlockAudio();
-    const input = $("q");
-    const q = input?.value?.trim();
-    if (!q && !state.photos.strip && !state.photos.rx) return;
-    if (input) input.value = "";
-    ask({ text: q || null });
-  });
-
-  // File Inputs
-  $("in-strip")?.addEventListener("change", (e) => setPhoto("strip", e.target.files[0]));
-  $("in-rx")?.addEventListener("change", (e) => setPhoto("rx", e.target.files[0]));
-  $("btn-check-photo")?.addEventListener("click", () => {
-    unlockAudio();
-    ask({});
-  });
-
-  // Quick Preset Chips
-  document.querySelectorAll("[data-sample]").forEach((btn) => {
-    btn.addEventListener("click", () => triggerSample(btn.dataset.sample));
-  });
-
-  // Replay Transcript Audio
-  $("btn-replay-transcript")?.addEventListener("click", () => {
-    unlockAudio();
-    if (state.last) {
-      playResponse(state.last);
-    } else {
-      const defaultText = "Augmentin 625 Duo contains Amoxicillin 500 mg and Clavulanic Acid 125 mg. A Jan Aushadhi generic equivalent is available for 62 rupees, saving you about 72 percent.";
-      speakText(defaultText, state.lang, {});
-    }
-  });
-
-  // Approve & Update Button
-  $("btn-approve-action")?.addEventListener("click", () => {
-    toast("✓ Clinic record approved & updated successfully.");
-    const statusBadge = $("clinic-status-text");
-    if (statusBadge) statusBadge.textContent = "✓ Approved & Synced";
-    const reviewPill = $("clinic-review-badge");
-    if (reviewPill) reviewPill.style.background = "#dcfce7";
-  });
-
-  // Speak to Chemist
-  $("btn-speak-chemist")?.addEventListener("click", openChemistModal);
-  $("chemist-close")?.addEventListener("click", () => $("modal-chemist")?.close());
-  $("btn-play-chemist-modal")?.addEventListener("click", playChemistAudio);
-
-  // Draft Grievance
-  $("btn-draft-grievance")?.addEventListener("click", openGrievanceModal);
-  $("grievance-close")?.addEventListener("click", () => $("modal-grievance")?.close());
-  $("btn-copy-grievance")?.addEventListener("click", () => {
-    const text = $("grievance-body-text")?.textContent || "";
-    navigator.clipboard?.writeText(text);
-    toast("Copied grievance draft to clipboard.");
-  });
-
-  // Add to Pouch Quick
-  $("btn-add-pouch-quick")?.addEventListener("click", () => {
-    const salts = targetSalts(state.last || {});
-    if (salts.length) {
-      setPouch([...state.pouch, ...salts]);
-      toast(`Added ${salts.join(", ")} to Home Pouch.`);
-    } else {
-      setPouch([...state.pouch, "Amoxicillin", "Clavulanic Acid"]);
-      toast("Added Amoxicillin + Clavulanic Acid to Home Pouch.");
-    }
-  });
-
-  // Modal Closures & Navigation
-  $("btn-pouch")?.addEventListener("click", () => {
-    renderPouch();
-    $("pouch")?.showModal();
-  });
-  $("pouch-close")?.addEventListener("click", () => $("pouch")?.close());
-  $("pouch-form")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const val = $("pouch-in")?.value?.trim();
-    if (val) {
-      setPouch([...state.pouch, val]);
-      if ($("pouch-in")) $("pouch-in").value = "";
-    }
-  });
-
-  $("btn-history")?.addEventListener("click", openHistory);
-  $("history-close")?.addEventListener("click", () => $("history")?.close());
-
-  $("btn-new")?.addEventListener("click", () => {
-    stopAudio();
-    state.sessionId = null;
-    store.set("session", null);
-    state.turns = [];
-    state.last = null;
+    const thread = await api(
+      "/v1/threads/" + encodeURIComponent(id) + "/localized?lang=" + state.lang,
+    );
+    state.session = id;
+    storage.set("session", id);
+    state.messages = thread.messages;
+    state.last =
+      [...thread.messages].reverse().find((m) => m.response)?.response || null;
+    // Audio jobs expire independently of persistent history.
+    if (state.last)
+      state.last = {
+        ...state.last,
+        audio_url: null,
+        audio_stream_url: null,
+        tts: "none",
+      };
+    state.fresh = false;
+    state.chemistOpen = false;
     clearPhotos();
-    renderThread();
-    toast("New consultation started.");
-  });
-
-  // Delegated clicks for dynamic elements
-  document.body.addEventListener("click", (e) => {
-    // Play text in transcript bubble
-    const playBtn = e.target.closest("[data-play-text]");
-    if (playBtn) {
-      unlockAudio();
-      speakText(playBtn.dataset.playText, state.lang, {});
-      return;
+    $("q").value = "";
+    renderCurrent();
+    renderMessages();
+    setStatus("status_saved");
+    if (close) $("history").classList.remove("is-open");
+  } catch (error) {
+    if (error.code === "THREAD_NOT_FOUND") {
+      state.threads = state.threads.filter((x) => x !== id);
+      storage.set("threads", state.threads);
+      if (state.session === id) {
+        state.session = null;
+        storage.set("session", null);
+      }
     }
-
-    // Remove attached photo
-    const removePhoto = e.target.closest("[data-act='remove-photo']");
-    if (removePhoto) {
-      setPhoto(removePhoto.dataset.kind, null);
-      return;
-    }
-
-    // Delete pouch item
-    const delPouch = e.target.closest("[data-pouch-del]");
-    if (delPouch) {
-      const idx = Number(delPouch.dataset.pouchDel);
-      setPouch(state.pouch.filter((_, i) => i !== idx));
-      return;
-    }
-
-    // Tap outside dialogs closes them
-    for (const d of [$("pouch"), $("history"), $("modal-chemist"), $("modal-grievance")]) {
-      if (e.target === d) d.close();
-    }
-  });
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
 }
-
-// ------------------------------------------------------------------ Initialization
-async function init() {
-  bindEvents();
-  renderPouch();
-  renderThread();
-
+async function deleteThread(id) {
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    await api("/v1/threads/" + encodeURIComponent(id), { method: "DELETE" });
+    state.threads = state.threads.filter((x) => x !== id);
+    storage.set("threads", state.threads);
+    if (state.session === id) reset();
+    toast("history_deleted");
+    await openHistory(true);
+  } catch (error) {
+    toast("err_generic");
+  } finally {
+    setBusy(false);
+  }
+}
+function reset() {
+  stopAudio();
+  cancelRecording();
+  state.session = null;
+  storage.set("session", null);
+  state.messages = [];
+  state.last = null;
+  state.fresh = false;
+  state.voiceConversation = false;
+  state.chemistOpen = false;
+  clearPhotos();
+  clearError();
+  $("q").value = "";
+  renderCurrent();
+  renderMessages();
+  state.statusKey = null;
+  $("result-status").textContent = "";
+  $("result-status").hidden = true;
+}
+function setStatus(key) {
+  state.statusKey = key;
+  $("result-status").textContent = t(state.lang, key);
+}
+function renderConnection() {
+  $("connection").textContent = state.connectionKey
+    ? t(state.lang, state.connectionKey)
+    : "";
+}
+function translate() {
+  if (state.toastKey) $("toast").textContent = t(state.lang, state.toastKey);
+  document.documentElement.lang = state.lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(state.lang, el.dataset.i18n);
+  });
+  document
+    .querySelectorAll("[data-i18n-aria]")
+    .forEach((el) =>
+      el.setAttribute("aria-label", t(state.lang, el.dataset.i18nAria)),
+    );
+  document.title = t(state.lang, "page_title");
+  document.querySelector('meta[name="description"]').content = t(
+    state.lang,
+    "hero_description",
+  );
+  if (state.statusKey) setStatus(state.statusKey);
+  if (state.lastError)
+    $("request-error").innerHTML = String(
+      renderError(state.lastError, state.lang),
+    );
+  renderConnection();
+  renderHistory();
+  $("q").placeholder = t(state.lang, "type_placeholder");
+  renderMic();
+  renderCurrent();
+  renderMessages();
+  renderThumbs();
+}
+async function connect() {
   try {
     state.cfg = await api("/v1/config");
-    const modesEl = $("modes");
-    if (modesEl) modesEl.innerHTML = String(renderModes(state.cfg));
-    const dataBody = $("data-body");
-    if (dataBody) dataBody.innerHTML = String(renderDataSources(state.cfg.data_sources, state.lang));
+    const synthetic = Object.values(state.cfg.data_sources || {}).some(
+      (source) =>
+        /synthetic|fixture|demo|seed_dev/i.test(JSON.stringify(source)),
+    );
+    state.connectionKey = synthetic ? "demo_notice" : null;
+    renderConnection();
+    $("connection").hidden = !synthetic;
+    $("connection").classList.toggle("warning", synthetic);
+    $("retry-connection").hidden = true;
   } catch {
-    /* backend is loaded or offline */
+    state.cfg = null;
+    state.connectionKey = "connection_error";
+    renderConnection();
+    $("connection").hidden = false;
+    $("connection").classList.add("warning");
+    $("retry-connection").hidden = false;
   }
-
-  // Check consent dialog
-  if (!store.get("consent", false)) {
-    const consentDlg = $("consent");
-    if (consentDlg) {
-      consentDlg.addEventListener("close", () => store.set("consent", true), { once: true });
-      consentDlg.showModal();
+  $("mic").disabled = state.busy || state.cfg?.stt !== "prisma";
+  renderMic();
+}
+$("lang").innerHTML = LANGS.map(
+  (lang) => `<option value="${lang}">${LANG_NAMES[lang]}</option>`,
+).join("");
+$("lang").value = state.lang;
+$("lang").addEventListener("change", async () => {
+  stopAudio();
+  state.voiceConversation = false;
+  state.lang = $("lang").value;
+  storage.set("lang", state.lang);
+  translate();
+  if (state.session && state.last) {
+    const selectedLang = state.lang;
+    setBusy(true);
+    try {
+      const thread = await api(
+        "/v1/threads/" +
+          encodeURIComponent(state.session) +
+          "/localized?lang=" +
+          selectedLang,
+      );
+      if (state.lang === selectedLang) {
+        state.messages = thread.messages;
+        state.last =
+          [...thread.messages].reverse().find((m) => m.response)?.response ||
+          null;
+        state.fresh = false;
+        renderCurrent();
+        renderMessages();
+        setStatus("status_saved");
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setBusy(false);
     }
   }
-
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+});
+$("ask").addEventListener("submit", (event) => {
+  event.preventDefault();
+  unlockAudio();
+  ask();
+});
+$("mic").addEventListener("click", toggleRecording);
+$("voice-stop").addEventListener("click", () => {
+  stopAudio();
+  cancelRecording();
+});
+$("refresh-voice").addEventListener("click", connect);
+for (const kind of ["strip", "rx"])
+  $("in-" + kind).addEventListener("change", (event) =>
+    setPhoto(kind, event.target.files[0]),
+  );
+$("btn-new").addEventListener("click", () => {
+  if (!state.busy) reset();
+});
+$("btn-history").addEventListener("click", () => openHistory());
+$("retry-connection").addEventListener("click", connect);
+document.body.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  if (button.dataset.close) {
+    $(button.dataset.close).classList.remove("is-open");
+    return;
   }
-}
-
-init();
+  if (button.dataset.threadOpen) {
+    loadThread(button.dataset.threadOpen);
+    return;
+  }
+  if (button.dataset.threadDelete) {
+    deleteThread(button.dataset.threadDelete);
+    return;
+  }
+  if (state.busy) return;
+  switch (button.dataset.act) {
+    case "pick":
+      $("in-" + button.dataset.kind)?.click();
+      break;
+    case "remove-photo":
+      setPhoto(button.dataset.kind, null);
+      break;
+    case "confirm":
+      confirm(button.dataset.id);
+      break;
+    case "confirm-none":
+      confirm(null, true);
+      break;
+    case "replay":
+      playResponse(state.last);
+      break;
+    case "stop-audio":
+      stopAudio();
+      break;
+    case "chemist-toggle":
+      state.chemistOpen = !state.chemistOpen;
+      renderCurrent();
+      break;
+    case "chemist-play":
+      speakChemist();
+      break;
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && rec.on) cancelRecording();
+});
+window.addEventListener("pagehide", () => {
+  cancelRecording();
+  stopAudio();
+  state.urls.forEach((url) => URL.revokeObjectURL(url));
+});
+$("auto-speak").checked = state.autoSpeak;
+$("auto-speak").addEventListener("change", () => {
+  state.autoSpeak = $("auto-speak").checked;
+  storage.set("autoSpeak", state.autoSpeak);
+  if (!state.autoSpeak) stopAudio();
+});
+translate();
+await connect();
+await openHistory(true);
+if (state.session) await loadThread(state.session, false);
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.register("/sw.js").catch(() => {});

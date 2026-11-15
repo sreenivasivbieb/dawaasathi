@@ -1,579 +1,294 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Momo · AI Healthcare Receptionist & Medicine Companion</title>
-  <meta name="description" content="Every patient call, handled with care. Real-time multilingual voice assistant for healthcare, prescriptions, and clinic actions.">
-  <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#f7faf8">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/icons/icon.svg">
-  <link rel="stylesheet" href="/styles.css">
-  <script type="module" src="/app.js"></script>
-</head>
-<body>
-  <!-- Ambient Clinic Background Visuals -->
-  <div class="bg-ambient" aria-hidden="true">
-    <div class="bg-ambient-grid"></div>
-    <div class="bg-ambient-atrium"></div>
-  </div>
-
-  <!-- Navigation Header -->
-  <header class="site-header">
-    <div class="site-header__inner">
-      <div class="brand">
-        <a href="/" class="brand-link" aria-label="Momo Healthcare Receptionist">
-          <span class="brand-logo-momo">M<span class="brand-dot"></span>mo</span>
-          <span class="brand-tag-badge">AI Clinic Receptionist</span>
-        </a>
-      </div>
-
-      <nav class="site-nav" aria-label="Main Navigation">
-        <ul class="nav-menu">
-          <li><a href="#demo" class="nav-link active">Product</a></li>
-          <li><a href="#features" class="nav-link">Solution</a></li>
-          <li><a href="#features" class="nav-link">Resource</a></li>
-          <li><a href="#trust" class="nav-link">About Us</a></li>
-          <li><a href="#footer" class="nav-link">Enterprise</a></li>
-        </ul>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#176b55" />
+    <meta
+      name="description"
+      content="Check a medicine or compare your prescription with a medicine strip."
+    />
+    <title>Dawaa Saathi · Check your medicine</title>
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#q" data-i18n="skip">Skip to medicine check</a>
+    <header class="topbar">
+      <a
+        class="brand"
+        href="/"
+        aria-label="Dawaa Saathi home"
+        data-i18n-aria="home"
+        ><span class="brand-mark" aria-hidden="true"
+          ><img src="/icons/icon.svg" alt="" width="40" height="40" /></span
+        ><span data-i18n="app_name">Dawaa Saathi</span></a
+      >
+      <nav aria-label="Conversations" data-i18n-aria="history_title">
+        <button type="button" id="btn-history" data-i18n="history">
+          History
+        </button>
       </nav>
-
-      <div class="header-actions">
-        <!-- Language Selector -->
-        <label class="lang-select-wrap" title="Change Language">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
-          <select id="lang" aria-label="Language selection"></select>
-        </label>
-
-        <!-- Home Pouch / Medicine Cabinet -->
-        <button id="btn-pouch" class="icon-btn-header" type="button" aria-haspopup="dialog" aria-controls="pouch" title="Home Medicines Pouch">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9.5h14v9.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM8.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5M12 12.5v5M9.5 15h5"/></svg>
-          <span id="pouch-count" class="badge-count" hidden>0</span>
-        </button>
-
-        <!-- Chat History -->
-        <button id="btn-history" class="icon-btn-header" type="button" aria-haspopup="dialog" aria-controls="history" title="Past Conversations">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
-        </button>
-
-        <!-- New Chat -->
-        <button id="btn-new" class="icon-btn-header" type="button" title="Start New Conversation">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
-
-        <!-- Status Indicator -->
-        <div class="status-pill" id="backend-status-pill" title="Backend connection active">
-          <span class="status-dot"></span>
-          <span>Online</span>
-        </div>
-
-        <button class="btn-header-ghost" id="btn-signin" type="button">Sign In</button>
-        <a href="#demo" class="btn-get-started" id="btn-cta-nav">
-          <span>Get Started</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </a>
-      </div>
-    </div>
-  </header>
-
-  <main id="main">
-    <!-- Hero Section -->
-    <section class="hero" id="demo">
-      <div class="hero-inner">
-        <div class="hero-pill-badge">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-          <span>AI Healthcare Receptionist</span>
-        </div>
-
-        <h1 class="hero-title">
-          <span>Every patient call,</span>
-          <span>handled with care.</span>
-        </h1>
-
-        <p class="hero-subtitle">
-          Meet your AI receptionist that answers patient calls, understands every request, and turns conversations into clear clinic actions.
-        </p>
-
-        <div class="hero-actions">
-          <button class="btn-hero-primary" id="btn-book-demo" type="button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            <span>Book a Demo</span>
+      <label class="language"
+        ><span data-i18n="lang_label">Language</span
+        ><select
+          id="lang"
+          aria-label="Language"
+          data-i18n-aria="lang_label"
+        ></select
+      ></label>
+    </header>
+    <div class="app-layout">
+      <aside
+        id="history"
+        aria-labelledby="history-title"
+        class="history-sidebar"
+      >
+        <div class="dialog-heading">
+          <h2 id="history-title" data-i18n="history_title">
+            Past conversations
+          </h2>
+          <button type="button" data-close="history" data-i18n="close">
+            Close
           </button>
-          <a href="#features" class="btn-hero-secondary">
-            <span>See How It Works</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-          </a>
         </div>
-
-        <!-- Centerpiece: Floating Momo Receptionist Card -->
-        <div class="receptionist-widget-wrap">
-          <div class="receptionist-card" id="receptionist-card">
-            <!-- 3D Glowing Liquid Orb -->
-            <div class="orb-container" id="receptionist-orb" role="button" aria-label="Tap to talk with Momo">
-              <div class="orb-glow-ambient"></div>
-              <div class="orb-ring"></div>
-              <div class="orb-liquid">
-                <div class="orb-highlight"></div>
-              </div>
+        <p data-i18n="history_note">
+          Only conversations started on this device are shown here.
+        </p>
+        <button type="button" id="btn-new" data-i18n="new_chat">
+          New conversation
+        </button>
+        <ul id="history-list" class="plain-list"></ul>
+      </aside>
+      <main>
+        <div class="hero-scene" aria-hidden="true">
+          <div class="scene-arch scene-arch--left"></div>
+          <div class="scene-arch scene-arch--right"></div>
+          <div class="scene-horizon"></div>
+          <div class="scene-rings"></div>
+        </div>
+        <section class="intro">
+          <span class="hero-kicker"
+            ><span class="status-dot" aria-hidden="true"></span
+            ><span data-i18n="hero_kicker">YOUR MEDICINE COMPANION</span></span
+          >
+          <h1>
+            <span data-i18n="hero_line1">A little clarity.</span><br /><span
+              data-i18n="hero_line2"
+              >A lot more</span
+            >
+            <em data-i18n="hero_care">care.</em>
+          </h1>
+          <p data-i18n="hero_description">
+            Understand your medicine, compare your prescription,<br
+              class="desktop-break"
+            />
+            and explore price references. Just ask.
+          </p>
+          <div class="hero-tags">
+            <span data-i18n="tag_voice">Speak in your language</span
+            ><span data-i18n="tag_rx">Check a prescription</span
+            ><span data-i18n="tag_price">Understand the price</span>
+          </div>
+        </section>
+        <div class="service-notice">
+          <p id="connection" class="notice" role="status" hidden=""></p>
+          <button
+            type="button"
+            id="retry-connection"
+            hidden=""
+            data-i18n="refresh_connection"
+          >
+            Retry connection
+          </button>
+        </div>
+        <div class="workspace">
+          <section
+            class="voice-panel"
+            id="voice-panel"
+            data-state="idle"
+            aria-labelledby="voice-title"
+          >
+            <div class="voice-topline">
+              <span class="voice-provider" data-i18n="gnani_voice"
+                >GNANI VOICE</span
+              ><span id="voice-badge" class="voice-badge"
+                >Checking connection</span
+              >
             </div>
-
-            <div class="receptionist-name">Momo Receptionist</div>
-            <div class="receptionist-status-row">
-              <span id="call-status">Ready</span> · <span id="call-timer" class="call-timer">01:23</span>
-            </div>
-
-            <!-- Dynamic Soundwave SVG -->
-            <div class="soundwave-box" aria-hidden="true">
-              <svg class="soundwave-svg" viewBox="0 0 320 48" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="soundwave-gradient" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/>
-                    <stop offset="50%" stop-color="#059669" stop-opacity="1"/>
-                    <stop offset="100%" stop-color="#34d399" stop-opacity="0.3"/>
-                  </linearGradient>
-                </defs>
-                <path id="soundwave-path" class="soundwave-path" d="M 0 24 Q 40 24 80 24 T 160 24 T 240 24 T 320 24"/>
-              </svg>
-            </div>
-
-            <!-- Call Controls -->
-            <div class="call-controls">
-              <!-- End Call / Mute -->
-              <button class="btn-end-call" id="btn-end-call" type="button" title="End call or stop audio">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91M1 1l22 22"/></svg>
+            <div class="orb-stage">
+              <div class="orb-halo" aria-hidden="true"></div>
+              <button
+                id="mic"
+                type="button"
+                disabled=""
+                data-state="idle"
+                aria-label="Start speaking"
+                aria-describedby="mic-status"
+              >
+                <span class="voice-orb" aria-hidden="true"></span
+                ><svg
+                  class="mic-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="9"
+                    y="3"
+                    width="6"
+                    height="12"
+                    rx="3"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                  ></rect>
+                  <path
+                    d="M5.5 10.5V12a6.5 6.5 0 0 0 13 0v-1.5M12 18.5V22m-3 0h6"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                  ></path>
+                </svg>
               </button>
-
-              <!-- Main Mic / Voice Button -->
-              <button class="btn-start-call" id="mic" type="button" data-state="idle" aria-label="Tap to speak with Momo">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3M8 22h8"/></svg>
+            </div>
+            <h2 id="voice-title">Let’s talk medicine.</h2>
+            <p id="mic-label" class="voice-action">Tap the orb to speak</p>
+            <div class="voice-wave" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+              ><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <p id="mic-status" class="hint" role="status">
+              Checking voice availability…
+            </p>
+            <button id="voice-stop" type="button" hidden="">Stop voice</button>
+            <details id="voice-setup" hidden="">
+              <summary data-i18n="connect_voice">Connect Gnani voice</summary>
+              <p data-i18n="voice_setup">
+                Add <code>GNANI_API_KEY</code> to the server’s
+                <code>.env</code> file and restart the server. Your key stays on
+                the server.
+              </p>
+              <button
+                id="refresh-voice"
+                type="button"
+                data-i18n="refresh_connection"
+              >
+                Check connection
               </button>
+            </details>
+            <label class="auto-speak"
+              ><input id="auto-speak" type="checkbox" checked="" /><span
+                data-i18n="spoken_replies"
+                >Spoken replies</span
+              ></label
+            >
+            <div class="voice-caption">
+              Prisma <span data-i18n="voice_listens"></span> · Timbre
+              <span data-i18n="voice_speaks"></span>
             </div>
-            <p id="mic-status" class="vh">Tap to speak</p>
-            <p id="live-line" class="live-line" hidden></p>
-          </div>
-        </div>
-
-        <!-- Green Curved Trace Lines Connecting Widgets -->
-        <svg class="connecting-lines-svg" viewBox="0 0 980 54" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="trace-gradient" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stop-color="#10b981" stop-opacity="0.4"/>
-              <stop offset="50%" stop-color="#059669" stop-opacity="0.9"/>
-              <stop offset="100%" stop-color="#10b981" stop-opacity="0.4"/>
-            </linearGradient>
-          </defs>
-          <path class="trace-line" d="M 490 0 C 490 32, 245 16, 245 54" />
-          <path class="trace-line" d="M 490 0 C 490 32, 735 16, 735 54" />
-        </svg>
-
-        <!-- Hidden toggles for compatibility with backend stream -->
-        <div style="display: none;">
-          <input type="checkbox" id="tg-phone">
-          <input type="checkbox" id="tg-live">
-          <div id="modes"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Dual Connected Panels: Left (Transcript) & Right (Clinic Record) -->
-    <section class="panels-container">
-      <div class="panels-grid">
-        <!-- Left Panel: Call Transcript -->
-        <div class="panel-card transcript-panel">
-          <div class="panel-card-head">
-            <h2 class="panel-card-title">
-              <span>Call transcript</span>
-            </h2>
-            <button class="pill-badge-audio" id="btn-replay-transcript" type="button" title="Play call audio recording">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-              <span id="audio-pill-duration">04:22</span>
-            </button>
-          </div>
-
-          <!-- Dynamic Chat Message Bubbles -->
-          <div class="transcript-thread" id="thread" role="log" aria-label="Conversation messages">
-            <!-- Initial conversation mock populated by Javascript on load to match the user's screenshot -->
-          </div>
-
-          <!-- Quick Try Sample Presets -->
-          <div class="demo-presets-row">
-            <span class="demo-preset-label">Quick Try:</span>
-            <button type="button" class="btn-preset-chip" data-sample="augmentin">💊 Augmentin 625</button>
-            <button type="button" class="btn-preset-chip" data-sample="dolo">💊 Dolo 650</button>
-            <button type="button" class="btn-preset-chip" data-sample="combiflam">💊 Combiflam</button>
-            <button type="button" class="btn-preset-chip" data-sample="rx-photo">📄 Sample Rx</button>
-            <button type="button" class="btn-preset-chip" data-sample="strip-photo">🏷️ Sample Strip</button>
-          </div>
-
-          <!-- Interactive Question & Input Form -->
-          <form id="ask" class="transcript-input-form" autocomplete="off">
-            <label for="q" class="vh">Ask Momo</label>
-            <input id="q" name="q" class="transcript-input" type="text" maxlength="500" enterkeyhint="send" placeholder="Ask a question, medicine name or symptom…">
-            
-            <!-- File Attachments: Strip & Prescription -->
-            <label class="btn-input-icon" title="Upload or capture medicine strip photo" style="cursor: pointer;">
-              <input class="vh" type="file" id="in-strip" accept="image/*">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            </label>
-
-            <label class="btn-input-icon" title="Upload prescription document" style="cursor: pointer;">
-              <input class="vh" type="file" id="in-rx" accept="image/*">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            </label>
-
-            <!-- Send Button -->
-            <button type="submit" class="btn-input-send" id="btn-send" title="Send query">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
-          </form>
-
-          <!-- Attachment Previews -->
-          <div id="thumbs" class="attached-thumbs-wrap"></div>
-          <button id="btn-check-photo" type="button" class="btn-preset-chip" style="margin-top: 8px;" hidden>Check photo with Momo</button>
-          <p id="photo-hint" class="vh"></p>
-        </div>
-
-        <!-- Right Panel: Clinic Record -->
-        <div class="panel-card record-panel">
-          <div class="panel-card-head">
-            <h2 class="panel-card-title">
-              <span>Clinic record</span>
-            </h2>
-            <div class="pill-badge-review" id="clinic-review-badge">
-              <span class="dot"></span>
-              <span id="clinic-status-text">Draft ready to review</span>
-            </div>
-          </div>
-
-          <!-- Structured Clinic Output Content -->
-          <div class="clinic-sections-wrap" id="clinic-record-content">
-            <!-- Appointment & Prescription Update -->
-            <div class="clinic-record-box">
-              <div class="clinic-box-head">
-                <span class="clinic-box-title">Appointment Update</span>
-                <button class="btn-clinic-edit" type="button">Edit</button>
-              </div>
-              <div class="clinic-row-grid">
-                <div>
-                  <div class="clinic-field-label">Date & Time</div>
-                  <div class="clinic-field-value" id="field-updated-time">Fri, Sep 27, 2026 • 10:00 AM</div>
-                </div>
-                <div>
-                  <div class="clinic-field-label">Previously</div>
-                  <div class="clinic-field-value prev" id="field-prev-time">Fri, Sep 20, 2026 • 10:00 AM</div>
-                </div>
-              </div>
-
-              <!-- Medicine & Generic Alternative Card -->
-              <div class="med-highlight-card" id="field-med-card">
-                <div class="med-brand-row">
-                  <span class="med-name" id="field-med-name">Augmentin 625 Duo Tablet</span>
-                  <span class="badge-savings" id="field-med-savings">Save 72%</span>
-                </div>
-                <div class="med-salts" id="field-med-salts">Amoxicillin 500 mg + Clavulanic Acid 125 mg (Tablet)</div>
-                <div class="price-compare-row">
-                  <span class="price-mrp" id="field-med-mrp">MRP ₹223.40</span>
-                  <span class="price-generic" id="field-med-generic">Jan Aushadhi: ₹62.00</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Patient Note -->
-            <div class="clinic-record-box">
-              <div class="clinic-box-head">
-                <span class="clinic-box-title">Patient note</span>
-                <button class="btn-clinic-edit" type="button">Edit</button>
-              </div>
-              <div class="clinic-field-label">Date & Time</div>
-              <p class="patient-note-text" id="field-patient-note">
-                Patient has been experiencing a persistent cough for the past week. Would like to discuss during the visit. Noted Jan Aushadhi generic alternative for prescribed antibiotic.
+          </section>
+          <section
+            class="composer panel"
+            aria-label="Medicine question"
+            data-i18n-aria="type_label"
+          >
+            <div class="composer-heading">
+              <span class="eyebrow" data-i18n="composer_eyebrow"
+                >ASK · UPLOAD · UNDERSTAND</span
+              >
+              <h2 data-i18n="composer_title">Your medicine, made clearer.</h2>
+              <p data-i18n="composer_hint">
+                Type a question or share a photo of what’s in front of you.
               </p>
             </div>
-
-            <!-- Visit Reason & Clinical Tags -->
-            <div class="clinic-record-box">
-              <div class="clinic-box-head">
-                <span class="clinic-box-title">Visit reason</span>
-                <button class="btn-clinic-edit" type="button">Edit</button>
-              </div>
-              <div class="tag-chips-wrap" id="field-tag-chips">
-                <span class="tag-chip">Respiratory issue</span>
-                <span class="tag-chip">Persistent cough</span>
-                <span class="tag-chip active-safe">Generic substitute verified</span>
-                <span class="tag-chip active-safe">Safe non-banned FDC</span>
-              </div>
-            </div>
-
-            <!-- Safety & Regulatory Check -->
-            <div class="safety-verify-row safe" id="field-safety-row">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              <span id="field-safety-text">Verified Safe · Not listed on Central Banned FDC gazette</span>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="clinic-actions-bar">
-              <button class="btn-approve-update" id="btn-approve-action" type="button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Approve & update</span>
-              </button>
-              <div class="clinic-secondary-actions">
-                <button class="btn-clinic-sec" id="btn-speak-chemist" type="button">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                  <span>Speak to Chemist</span>
-                </button>
-                <button class="btn-clinic-sec" id="btn-draft-grievance" type="button">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span>Draft Grievance</span>
-                </button>
-                <button class="btn-clinic-sec" id="btn-add-pouch-quick" type="button">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                  <span>Add Pouch</span>
+            <form id="ask">
+              <label for="q" data-i18n="type_label">Type your question</label>
+              <textarea
+                id="q"
+                name="text"
+                rows="3"
+                maxlength="500"
+                placeholder="e.g. Dolo 650 price and generic"
+              ></textarea>
+              <div class="upload-row">
+                <button
+                  type="button"
+                  data-act="pick"
+                  data-kind="strip"
+                  data-i18n="strip_photo"
+                >
+                  Strip photo</button
+                ><button
+                  type="button"
+                  data-act="pick"
+                  data-kind="rx"
+                  data-i18n="rx_photo"
+                >
+                  Prescription photo
                 </button>
               </div>
-            </div>
-          </div>
-
-          <!-- Hidden container for legacy result rendering to maintain 100% full compatibility -->
-          <div id="result" hidden></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Subsequent Features Section (Matching right side of user mockup) -->
-    <section class="features-section" id="features">
-      <div class="features-header">
-        <span class="features-tag">Smart Clinic Platform</span>
-        <h2 class="features-title">A smarter way to handle every patient conversation.</h2>
-        <p class="features-desc">From answering calls to preparing clinic updates, Momo helps your team handle everyday front-desk work with less manual effort.</p>
-      </div>
-
-      <div class="feature-cards-grid">
-        <!-- Feature 1 -->
-        <div class="feature-card">
-          <div class="feature-card-info">
-            <h3 class="feature-card-title">Your front desk, always ready.</h3>
-            <p class="feature-card-desc">Answer patient calls, understand their requests, and provide helpful responses around the clock.</p>
-          </div>
-          <div class="feature-mock-wrap">
-            <div class="mock-call-box">
-              <div class="mock-orb-mini"></div>
-              <div style="font-size: 0.82rem; font-weight: 700; color: #111a16;">Momo Receptionist</div>
-              <div style="font-size: 0.72rem; color: #64748b;">Incoming patient call…</div>
-              <div class="mock-answer-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <p class="hint" data-i18n="comparison_hint">
+                Attach both photos to check whether the dispensed medicine
+                matches the prescription.
+              </p>
+              <input
+                id="in-strip"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden=""
+              />
+              <input
+                id="in-rx"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden=""
+              />
+              <div id="thumbs" class="thumbs"></div>
+              <div class="send-row">
+                <button
+                  id="send"
+                  class="btn--primary"
+                  type="submit"
+                  data-i18n="send"
+                >
+                  Check medicine
+                </button>
               </div>
-            </div>
-          </div>
+            </form>
+          </section>
         </div>
-
-        <!-- Feature 2 -->
-        <div class="feature-card">
-          <div class="feature-card-info">
-            <h3 class="feature-card-title">Turn conversations into structured updates.</h3>
-            <p class="feature-card-desc">Capture appointment changes, patient notes, and visit details directly from the conversation.</p>
-          </div>
-          <div class="feature-mock-wrap">
-            <div style="background: white; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; font-size: 0.75rem;">
-              <div style="display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 6px;">
-                <span>Appointment Update</span>
-                <span style="color: #059669;">• Draft</span>
-              </div>
-              <div style="color: #475569; margin-bottom: 4px;">Fri, Sep 27, 2026 • 10:00 AM</div>
-              <div style="background: #f0fdf4; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 600;">Augmentin 625 Duo (Save 72%)</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="feature-card">
-          <div class="feature-card-info">
-            <h3 class="feature-card-title">Keep every AI action under control.</h3>
-            <p class="feature-card-desc">Review suggested changes before they are applied, with a clear view of what changed and where the information came from.</p>
-          </div>
-          <div class="feature-mock-wrap">
-            <div style="background: white; border-radius: 12px; padding: 12px; border: 1px solid #e2e8f0; text-align: center;">
-              <div style="font-size: 0.78rem; font-weight: 700; color: #111a16; margin-bottom: 8px;">1 Action Ready to Approve</div>
-              <div style="background: #10b981; color: white; padding: 8px; border-radius: 999px; font-weight: 700; font-size: 0.78rem;">Approve & update</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Social Proof / Doctor & Patient Trust -->
-      <div class="social-proof-strip" id="trust">
-        <div class="avatar-group">
-          <img class="avatar-circle" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80" alt="Doctor" loading="lazy">
-          <img class="avatar-circle" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80" alt="Clinic Staff" loading="lazy">
-          <img class="avatar-circle" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&h=120&q=80" alt="Specialist" loading="lazy">
-          <img class="avatar-circle" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&h=120&q=80" alt="Patient" loading="lazy">
-        </div>
-        <div class="proof-text">
-          <b>99.2% Clinical Accuracy</b> across verified NPPA, Jan Aushadhi & Central Drug Standards.
-        </div>
-      </div>
-    </section>
-
-    <!-- Bottom Banner: Whatever patients need. -->
-    <section class="banner-section">
-      <div class="banner-card">
-        <div class="banner-content">
-          <h2 class="banner-title">Whatever patients need.</h2>
-          <p class="banner-subtitle">Empower your clinic and patients with AI healthcare reception that listens, understands, and takes safe clinic actions.</p>
-          <a href="#demo" class="btn-banner-cta">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            <span>Start Voice Consultation</span>
-          </a>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="site-footer" id="footer">
-    <div class="footer-inner">
-      <div class="footer-details-box">
-        <details id="data">
-          <summary>Verified Data Sources</summary>
-          <div id="data-body"><p class="small muted">Loading database references…</p></div>
+        <section
+          class="results"
+          aria-label="Medicine result"
+          aria-busy="false"
+          data-i18n-aria="reply"
+        >
+          <p id="result-status" class="muted" role="status" hidden=""></p>
+          <div id="request-error" role="alert" hidden=""></div>
+          <div id="result" aria-live="polite"></div>
+        </section>
+        <details id="conversation" hidden="">
+          <summary data-i18n="history_title">Conversation</summary>
+          <div id="thread"></div>
         </details>
-        <details id="debug">
-          <summary>System Diagnostics & Latency</summary>
-          <div id="debug-body"><p class="small muted">Ready</p></div>
-        </details>
-      </div>
-
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <div class="brand-logo-momo">M<span class="brand-dot"></span>mo</div>
-          <p>Every patient call, handled with care. The next generation AI healthcare receptionist and prescription assistant.</p>
-        </div>
-        <div class="footer-col">
-          <h4>Product</h4>
-          <ul>
-            <li><a href="#demo">AI Receptionist</a></li>
-            <li><a href="#demo">Prescription Scanner</a></li>
-            <li><a href="#demo">Generic Alternatives</a></li>
-            <li><a href="#demo">Safety Verification</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Regulations</h4>
-          <ul>
-            <li><a href="#data">NPPA Ceiling Prices</a></li>
-            <li><a href="#data">Jan Aushadhi Schemes</a></li>
-            <li><a href="#data">Banned FDC Gazette</a></li>
-            <li><a href="#data">Grievance Portal</a></li>
-          </ul>
-        </div>
-        <div class="footer-col">
-          <h4>Privacy & Legal</h4>
-          <ul>
-            <li><a href="#consent">Patient Privacy</a></li>
-            <li><a href="#consent">Medical Disclaimer</a></li>
-            <li><a href="#consent">Terms of Use</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="footer-bottom">
-        <p>© 2026 Momo Healthcare / Dawaa Saathi. Not a substitute for professional medical advice. Always consult your physician or licensed pharmacist.</p>
-        <p>Ultra-low latency STT · TTS · RapidOCR pipeline</p>
-      </div>
+        <footer class="page-footer">
+          <p data-i18n="doctor_footer">Confirm with a doctor or pharmacist.</p>
+          <details class="privacy">
+            <summary data-i18n="privacy">Privacy &amp; history</summary>
+            <p data-i18n="consent_1">
+              Voice and photos are processed for the check and not stored.
+            </p>
+            <p data-i18n="consent_5">
+              Conversation text is saved for history. You can delete it from
+              History.
+            </p>
+          </details>
+        </footer>
+      </main>
     </div>
-  </footer>
 
-  <!-- Modals & Sheets -->
-  <!-- 1. Home Pouch Dialog -->
-  <dialog id="pouch" class="modal-sheet" aria-labelledby="pouch-title">
-    <div class="modal-body">
-      <div class="modal-head">
-        <h3 id="pouch-title" class="modal-title">Home Medicines Pouch</h3>
-        <button id="pouch-close" class="btn-close-modal" type="button" aria-label="Close">✕</button>
-      </div>
-      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 16px;">
-        Medicines saved in your personal pouch are checked against every new query to avoid accidental duplicate salts or interactions. Stored privately on your device.
-      </p>
-      <ul id="pouch-list" style="list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; max-height: 240px; overflow-y: auto;"></ul>
-      <form id="pouch-form" class="transcript-input-form" autocomplete="off">
-        <input id="pouch-in" class="transcript-input" type="text" maxlength="80" placeholder="Add salt, e.g. paracetamol">
-        <button class="btn-input-send" type="submit" style="width: 32px; height: 32px;">+</button>
-      </form>
-    </div>
-  </dialog>
-
-  <!-- 2. Chat History Dialog -->
-  <dialog id="history" class="modal-sheet" aria-labelledby="history-title">
-    <div class="modal-body">
-      <div class="modal-head">
-        <h3 id="history-title" class="modal-title">Past Consultations</h3>
-        <button id="history-close" class="btn-close-modal" type="button" aria-label="Close">✕</button>
-      </div>
-      <ul id="history-list" style="list-style: none; display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto;"></ul>
-    </div>
-  </dialog>
-
-  <!-- 3. Consent / Start Dialog -->
-  <dialog id="consent" class="modal-sheet" aria-labelledby="consent-title">
-    <form method="dialog" class="modal-body">
-      <div style="text-align: center; margin-bottom: 16px;">
-        <span class="brand-logo-momo" style="font-size: 2.2rem;">M<span class="brand-dot"></span>mo</span>
-        <h3 id="consent-title" class="modal-title" style="margin-top: 10px;">Before you begin</h3>
-      </div>
-      <ul style="font-size: 0.88rem; color: #475569; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; padding-left: 20px;">
-        <li>Your voice and photos are used strictly to provide real-time medicine and clinic answers.</li>
-        <li>This assistant provides pricing, alternatives, and verified safety facts; it is not medical diagnosis.</li>
-        <li>Always confirm critical health decisions with your doctor or pharmacist.</li>
-      </ul>
-      <div style="margin-bottom: 16px; text-align: center;">
-        <label class="lang-select-wrap">
-          <span>Preferred Language:</span>
-          <select id="lang2"></select>
-        </label>
-      </div>
-      <button id="consent-ok" class="btn-approve-update" value="ok" type="submit">I understand, start</button>
-    </form>
-  </dialog>
-
-  <!-- 4. Speak to Chemist Modal -->
-  <dialog id="modal-chemist" class="modal-sheet" aria-labelledby="chemist-title">
-    <div class="modal-body">
-      <div class="modal-head">
-        <h3 id="chemist-title" class="modal-title">Speak to Chemist</h3>
-        <button id="chemist-close" class="btn-close-modal" type="button" aria-label="Close">✕</button>
-      </div>
-      <p style="font-size: 0.88rem; color: #64748b; margin-bottom: 16px;">
-        Show this script to your pharmacist or tap play to have Momo speak directly in your local language:
-      </p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 18px;">
-        <p id="chemist-script-text" style="font-size: 1rem; font-weight: 500; color: #111a16; line-height: 1.6;">
-          "Do you have a Jan Aushadhi or cheaper generic of Amoxicillin 500 mg + Clavulanic Acid 125 mg (tablet)?"
-        </p>
-      </div>
-      <button class="btn-approve-update" id="btn-play-chemist-modal" type="button">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        <span>Play Audio to Chemist</span>
-      </button>
-    </div>
-  </dialog>
-
-  <!-- 5. Grievance Draft Modal -->
-  <dialog id="modal-grievance" class="modal-sheet" aria-labelledby="grievance-title">
-    <div class="modal-body">
-      <div class="modal-head">
-        <h3 id="grievance-title" class="modal-title">NPPA Grievance Draft</h3>
-        <button id="grievance-close" class="btn-close-modal" type="button" aria-label="Close">✕</button>
-      </div>
-      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 14px;">
-        If a medicine is sold above the national NPPA ceiling price, you can submit this draft to the NPPA Pharma Jan Samadhan portal:
-      </p>
-      <div id="grievance-body-text" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; font-size: 0.85rem; color: #1e293b; max-height: 200px; overflow-y: auto; margin-bottom: 16px; white-space: pre-wrap;"></div>
-      <button class="btn-hero-primary" id="btn-copy-grievance" type="button" style="width: 100%; justify-content: center;">Copy Draft Statement</button>
-    </div>
-  </dialog>
-
-  <!-- Toast Element -->
-  <div id="toast" class="site-toast" role="status" aria-live="polite" hidden></div>
-</body>
+    <div id="toast" class="toast" role="status" hidden=""></div>
+  </body>
 </html>
